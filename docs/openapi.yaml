@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: CodeBlue 365 Tenant Manager API
+  version: 1.1.0
+  description: Phase 1 API contract with tenant, integration, playbook, sync, and findings endpoints.
+servers:
+  - url: /api/v1
+paths:
+  /auth/entra/callback:
+    post:
+      summary: Process Entra auth callback claims
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [oid, tid]
+              properties:
+                oid: { type: string }
+                tid: { type: string }
+                preferred_username: { type: string }
+                email: { type: string }
+                name: { type: string }
+                iss: { type: string }
+                aud: { type: string }
+                nonce: { type: string }
+                groups:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200': { description: Authentication callback processed }
+        '403': { description: Tenant not permitted }
+  /tenants:
+    get:
+      summary: List managed tenants
+      responses:
+        '200': { description: Tenant list returned }
+    post:
+      summary: Create managed tenant
+      responses:
+        '201': { description: Tenant created }
+  /tenants/{tenantId}:
+    get:
+      summary: Get tenant detail
+      parameters:
+        - in: path
+          name: tenantId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Tenant returned }
+        '404': { description: Tenant not found }
+  /integrations:
+    get:
+      summary: List integrations
+      responses:
+        '200': { description: Integrations returned }
+  /integrations/validate:
+    post:
+      summary: Validate integration for a tenant
+      responses:
+        '200': { description: Validation result returned }
+        '404': { description: Integration not found }
+  /playbooks:
+    get:
+      summary: List active integration playbooks
+      responses:
+        '200': { description: Playbooks returned }
+  /playbooks/{slug}:
+    get:
+      summary: Get integration playbook detail
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Playbook returned }
+        '404': { description: Playbook not found }
+  /playbooks/{slug}/validate:
+    post:
+      summary: Run playbook validation for a tenant
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_id]
+              properties:
+                tenant_id: { type: string }
+      responses:
+        '200': { description: Playbook validation queued/recorded }
+        '404': { description: Playbook or tenant not found }
+  /sync/tenant/{tenantId}:
+    post:
+      summary: Queue tenant sync pipeline
+      parameters:
+        - in: path
+          name: tenantId
+          required: true
+          schema: { type: string }
+      responses:
+        '202': { description: Sync pipeline queued }
+  /findings:
+    get:
+      summary: List findings
+      responses:
+        '200': { description: Findings returned }
