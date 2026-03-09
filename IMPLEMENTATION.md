@@ -22,7 +22,7 @@ This repository now contains a **complete Phase 1 application scaffold** spannin
 
 ## Implemented frontend scope
 
-- Inertia/React page scaffolds for Dashboard, Tenants, Integrations, Playbooks (index + detail), and Findings with read-only API data fetching wired.
+- Inertia/React pages for Dashboard, Tenants, Integrations, Playbooks (index + detail), and Findings with live API data fetching plus tenant create/sync and validation forms.
 - Shared application layout with role-aware navigation gating scaffold.
 
 ## Contract and quality artifacts

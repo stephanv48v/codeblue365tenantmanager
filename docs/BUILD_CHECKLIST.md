@@ -42,7 +42,7 @@ Status: **Phase 1 implementation scaffold is complete in-repo**. Remaining items
 
 ## 6) Frontend and UX
 - [x] Add Inertia page scaffolds for dashboard, tenants, integrations, findings, and playbooks
-- [~] Implement real data-fetching and forms in the React pages — read-only data fetching wired; forms still pending
+- [x] Implement real data-fetching and forms in the React pages (tenant create/sync, integration validation, playbook validation)
 - [x] Add role-aware navigation and route guards in frontend shell (navigation-level gating scaffold)
 
 ## 7) Testing and Quality
