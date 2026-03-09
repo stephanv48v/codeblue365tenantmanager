@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Ingestion\Application\Services;
 
 use App\Modules\Findings\Jobs\GenerateFindingsJob;
+use App\Modules\Ingestion\Jobs\CalculateCopilotReadinessJob;
 use App\Modules\Ingestion\Jobs\SyncTenantConditionalAccessJob;
+use App\Modules\Ingestion\Jobs\SyncTenantCopilotUsageJob;
 use App\Modules\Ingestion\Jobs\SyncTenantDevicesJob;
 use App\Modules\Ingestion\Jobs\SyncTenantHealthJob;
 use App\Modules\Ingestion\Jobs\SyncTenantLicensingJob;
 use App\Modules\Ingestion\Jobs\SyncTenantRiskyUsersJob;
 use App\Modules\Ingestion\Jobs\SyncTenantSecureScoreJob;
 use App\Modules\Ingestion\Jobs\SyncTenantServiceHealthEventsJob;
+use App\Modules\Ingestion\Jobs\SyncTenantSharePointSitesJob;
 use App\Modules\Ingestion\Jobs\SyncTenantUsersJob;
 use App\Modules\Scoring\Jobs\CalculateTenantScoreJob;
 use Illuminate\Support\Facades\Bus;
@@ -37,6 +40,9 @@ class TenantSyncPipelineService
             new SyncTenantConditionalAccessJob($tenantId),
             new SyncTenantSecureScoreJob($tenantId),
             new SyncTenantServiceHealthEventsJob($tenantId),
+            new SyncTenantCopilotUsageJob($tenantId),
+            new SyncTenantSharePointSitesJob($tenantId),
+            new CalculateCopilotReadinessJob($tenantId),
             new CalculateTenantScoreJob($tenantId),
             new GenerateFindingsJob($tenantId),
         ])->dispatch();

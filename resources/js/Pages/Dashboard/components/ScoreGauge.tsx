@@ -27,7 +27,7 @@ function scoreColor(score: number): string {
 }
 
 export default function ScoreGauge({ compositeScore, subScores }: Props) {
-    const chartData = subScoreConfig.map((cfg) => ({
+    const chartData: Array<{ name: string; value: number; fill: string }> = subScoreConfig.map((cfg) => ({
         name: cfg.label,
         value: subScores[cfg.key as keyof SubScores],
         fill: cfg.color,

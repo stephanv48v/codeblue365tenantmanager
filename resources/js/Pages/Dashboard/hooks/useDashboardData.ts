@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTenantScope } from '../../../hooks/useTenantScope';
 
 export type ScoreEntry = {
     tenant_id: string;
@@ -91,17 +92,19 @@ const emptyStats: StatsData = {
 };
 
 export function useDashboardData(): DashboardData {
+    const { selectedTenantId, buildUrl } = useTenantScope();
     const [data, setData] = useState<DashboardData>({
         stats: null, integrationHealth: null, security: null, operations: null, identityLicensing: null, loading: true,
     });
 
     useEffect(() => {
+        setData((prev) => ({ ...prev, loading: true }));
         Promise.allSettled([
-            fetch('/api/v1/dashboard/stats').then((r) => r.json()),
-            fetch('/api/v1/dashboard/integration-health').then((r) => r.json()),
-            fetch('/api/v1/dashboard/security').then((r) => r.json()),
-            fetch('/api/v1/dashboard/operations').then((r) => r.json()),
-            fetch('/api/v1/dashboard/identity-licensing').then((r) => r.json()),
+            fetch(buildUrl('/api/v1/dashboard/stats')).then((r) => r.json()),
+            fetch(buildUrl('/api/v1/dashboard/integration-health')).then((r) => r.json()),
+            fetch(buildUrl('/api/v1/dashboard/security')).then((r) => r.json()),
+            fetch(buildUrl('/api/v1/dashboard/operations')).then((r) => r.json()),
+            fetch(buildUrl('/api/v1/dashboard/identity-licensing')).then((r) => r.json()),
         ]).then(([statsR, intR, secR, opsR, idLicR]) => {
             setData({
                 stats: statsR.status === 'fulfilled' && statsR.value.success ? statsR.value.data : emptyStats,
@@ -112,7 +115,7 @@ export function useDashboardData(): DashboardData {
                 loading: false,
             });
         });
-    }, []);
+    }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return data;
 }

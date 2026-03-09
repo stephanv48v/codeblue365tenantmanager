@@ -4,6 +4,7 @@ import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
 import ChartCard from '../../Components/ChartCard';
 import SkeletonLoader from '../../Components/SkeletonLoader';
+import { useTenantScope } from '../../hooks/useTenantScope';
 import {
     ShieldCheckIcon,
     ShieldExclamationIcon,
@@ -36,17 +37,19 @@ const SEVERITY_COLORS: Record<string, string> = {
 const GDAP_COLORS = ['#10b981', '#ef4444', '#94a3b8'];
 
 export default function SecurityIndex() {
+    const { selectedTenantId, buildUrl } = useTenantScope();
     const [data, setData] = useState<SecurityData | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/api/v1/dashboard/security')
+        setLoading(true);
+        fetch(buildUrl('/api/v1/dashboard/security'))
             .then((r) => r.json())
             .then((res) => {
                 setData(res.success ? res.data : null);
                 setLoading(false);
             });
-    }, []);
+    }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (loading) {
         return (

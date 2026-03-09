@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTenantScope } from '../../../hooks/useTenantScope';
 
 export type LicensingOverview = {
     total_licenses: number;
@@ -26,10 +27,12 @@ export type LicensingData = {
 };
 
 export function useLicensingData(): LicensingData {
+    const { selectedTenantId, buildUrl } = useTenantScope();
     const [data, setData] = useState<LicensingData>({ overview: null, loading: true });
 
     useEffect(() => {
-        fetch('/api/v1/licensing/overview')
+        setData((prev) => ({ ...prev, loading: true }));
+        fetch(buildUrl('/api/v1/licensing/overview'))
             .then((r) => r.json())
             .then((res) => {
                 setData({
@@ -38,7 +41,7 @@ export function useLicensingData(): LicensingData {
                 });
             })
             .catch(() => setData({ overview: null, loading: false }));
-    }, []);
+    }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return data;
 }

@@ -97,7 +97,35 @@ class AdminController extends Controller
             $query->where('event_type', (string) $request->string('event_type'));
         }
 
+        if ($request->filled('actor')) {
+            $query->where('actor_identifier', 'like', '%' . (string) $request->string('actor') . '%');
+        }
+
+        if ($request->filled('date_from')) {
+            $query->where('created_at', '>=', (string) $request->string('date_from'));
+        }
+
+        if ($request->filled('date_to')) {
+            $query->where('created_at', '<=', (string) $request->string('date_to') . ' 23:59:59');
+        }
+
+        if ($request->filled('search')) {
+            $search = (string) $request->string('search');
+            $query->where(function ($q) use ($search): void {
+                $q->where('event_type', 'like', "%{$search}%")
+                  ->orWhere('actor_identifier', 'like', "%{$search}%")
+                  ->orWhere('payload', 'like', "%{$search}%");
+            });
+        }
+
         $logs = $query->paginate((int) $request->integer('per_page', 50));
+
+        // Get distinct event types for filter dropdown
+        $eventTypes = DB::table('audit_logs')
+            ->select('event_type')
+            ->distinct()
+            ->orderBy('event_type')
+            ->pluck('event_type');
 
         return ApiResponse::success([
             'items' => $logs->items(),
@@ -107,6 +135,7 @@ class AdminController extends Controller
                 'current_page' => $logs->currentPage(),
                 'last_page' => $logs->lastPage(),
             ],
+            'event_types' => $eventTypes,
         ]);
     }
 }

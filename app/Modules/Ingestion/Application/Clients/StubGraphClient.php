@@ -252,6 +252,16 @@ class StubGraphClient implements GraphClient
         ];
     }
 
+    public function fetchCopilotUsage(string $tenantId): array
+    {
+        return [];
+    }
+
+    public function fetchSharePointSites(string $tenantId): array
+    {
+        return [];
+    }
+
     public function fetchDelegatedTenants(): array
     {
         return [

@@ -5,6 +5,7 @@ import StatCard from '../../Components/StatCard';
 import ChartCard from '../../Components/ChartCard';
 import StatusBadge from '../../Components/StatusBadge';
 import SkeletonLoader from '../../Components/SkeletonLoader';
+import { useTenantScope } from '../../hooks/useTenantScope';
 import {
     CogIcon,
     CheckCircleIcon,
@@ -12,7 +13,10 @@ import {
     BellAlertIcon,
     ClockIcon,
 } from '@heroicons/react/24/outline';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import {
+    PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
+    AreaChart, Area, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
 
 type SyncRun = {
     id: number;
@@ -26,29 +30,37 @@ type SyncRun = {
 
 type SyncSummary = { completed: number; failed: number; pending: number; total: number };
 type StaleTenant = { tenant_id: string; customer_name: string; last_sync_at: string | null };
+type TrendPoint = { date: string; success: number; failed: number; partial: number; total: number };
 
 const PIE_COLORS = ['#10b981', '#ef4444', '#f59e0b'];
 
 export default function OperationsIndex() {
+    const { selectedTenantId, buildUrl } = useTenantScope();
     const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
     const [summary, setSummary] = useState<SyncSummary>({ completed: 0, failed: 0, pending: 0, total: 0 });
     const [staleTenants, setStaleTenants] = useState<StaleTenant[]>([]);
     const [openAlerts, setOpenAlerts] = useState(0);
+    const [trends, setTrends] = useState<TrendPoint[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/api/v1/dashboard/operations')
-            .then((r) => r.json())
-            .then((res) => {
-                if (res.success) {
-                    setSyncRuns(res.data.recent_sync_runs ?? []);
-                    setSummary(res.data.sync_summary ?? { completed: 0, failed: 0, pending: 0, total: 0 });
-                    setStaleTenants(res.data.stale_tenants ?? []);
-                    setOpenAlerts(res.data.open_alerts ?? 0);
-                }
-                setLoading(false);
-            });
-    }, []);
+        setLoading(true);
+        Promise.all([
+            fetch(buildUrl('/api/v1/dashboard/operations')).then((r) => r.json()),
+            fetch(buildUrl('/api/v1/sync/trends')).then((r) => r.json()),
+        ]).then(([opsRes, trendsRes]) => {
+            if (opsRes.success) {
+                setSyncRuns(opsRes.data.recent_sync_runs ?? []);
+                setSummary(opsRes.data.sync_summary ?? { completed: 0, failed: 0, pending: 0, total: 0 });
+                setStaleTenants(opsRes.data.stale_tenants ?? []);
+                setOpenAlerts(opsRes.data.open_alerts ?? 0);
+            }
+            if (trendsRes.success) {
+                setTrends(trendsRes.data.items ?? []);
+            }
+            setLoading(false);
+        });
+    }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (loading) {
         return (
@@ -67,6 +79,13 @@ export default function OperationsIndex() {
         { name: 'Failed', value: summary.failed ?? 0, fill: PIE_COLORS[1] },
         { name: 'Pending', value: summary.pending ?? 0, fill: PIE_COLORS[2] },
     ].filter((d) => d.value > 0);
+
+    const trendData = trends.map((t) => ({
+        date: new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        Success: t.success,
+        Failed: t.failed,
+        Partial: t.partial,
+    }));
 
     return (
         <AppLayout title="Operations">
@@ -100,27 +119,46 @@ export default function OperationsIndex() {
                     )}
                 </ChartCard>
 
-                {/* Stale Tenants */}
-                <div className="rounded-xl border border-slate-200 bg-white p-6 lg:col-span-8">
-                    <h3 className="mb-4 text-sm font-semibold text-slate-800">Stale Tenants <span className="font-normal text-slate-400">(No sync in 7+ days)</span></h3>
-                    {staleTenants.length === 0 ? (
-                        <div className="flex h-[200px] items-center justify-center text-sm text-emerald-600">All tenants are up to date</div>
+                {/* Sync Trend Chart */}
+                <ChartCard title="Sync Trends (30 Days)" className="lg:col-span-8">
+                    {trendData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={240}>
+                            <AreaChart data={trendData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+                                <YAxis tick={{ fontSize: 11 }} tickLine={false} />
+                                <Tooltip />
+                                <Area type="monotone" dataKey="Success" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+                                <Area type="monotone" dataKey="Failed" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} />
+                                <Area type="monotone" dataKey="Partial" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     ) : (
-                        <div className="max-h-[240px] space-y-2 overflow-y-auto">
-                            {staleTenants.map((t) => (
-                                <div key={t.tenant_id} className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
-                                    <div className="flex items-center gap-2">
-                                        <ClockIcon className="h-4 w-4 text-amber-600" />
-                                        <span className="text-sm font-medium text-slate-800">{t.customer_name}</span>
-                                    </div>
-                                    <span className="text-xs text-slate-400">
-                                        {t.last_sync_at ? `Last: ${new Date(t.last_sync_at).toLocaleDateString()}` : 'Never synced'}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                        <div className="flex h-[240px] items-center justify-center text-sm text-slate-400">No trend data available</div>
                     )}
-                </div>
+                </ChartCard>
+            </div>
+
+            {/* Stale Tenants */}
+            <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+                <h3 className="mb-4 text-sm font-semibold text-slate-800">Stale Tenants <span className="font-normal text-slate-400">(No sync in 7+ days)</span></h3>
+                {staleTenants.length === 0 ? (
+                    <div className="flex h-[80px] items-center justify-center text-sm text-emerald-600">All tenants are up to date</div>
+                ) : (
+                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                        {staleTenants.map((t) => (
+                            <div key={t.tenant_id} className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
+                                <div className="flex items-center gap-2">
+                                    <ClockIcon className="h-4 w-4 text-amber-600" />
+                                    <span className="text-sm font-medium text-slate-800">{t.customer_name}</span>
+                                </div>
+                                <span className="text-xs text-slate-400">
+                                    {t.last_sync_at ? `Last: ${new Date(t.last_sync_at).toLocaleDateString()}` : 'Never synced'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Recent Sync Runs Table */}

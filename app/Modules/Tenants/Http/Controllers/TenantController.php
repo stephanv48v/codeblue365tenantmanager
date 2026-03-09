@@ -81,32 +81,43 @@ class TenantController extends Controller
         ]);
     }
 
-    public function dashboardStats(): JsonResponse
+    public function dashboardStats(Request $request): JsonResponse
     {
-        $tenantCount = DB::table('managed_tenants')->count();
-        $openFindings = DB::table('findings')->where('status', 'open')->count();
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
+        $tenantCount = $tenantId
+            ? DB::table('managed_tenants')->where('tenant_id', $tenantId)->count()
+            : DB::table('managed_tenants')->count();
+        $openFindings = DB::table('findings')->where('status', 'open')->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))->count();
         $playbookCount = DB::table('integration_playbooks')->where('is_active', true)->count();
         $integrationCount = DB::table('integrations')->count();
 
-        $gdapActive = DB::table('gdap_relationships')->where('status', 'active')->count();
+        $gdapActive = DB::table('gdap_relationships')
+            ->where('status', 'active')
+            ->when($tenantId, fn($q, $id) => $q->whereIn('managed_tenant_id', function($sq) use ($id) { $sq->select('id')->from('managed_tenants')->where('tenant_id', $id); }))
+            ->count();
         $gdapExpiringSoon = DB::table('gdap_relationships')
             ->where('status', 'active')
             ->where('expires_at', '<=', now()->addDays(30))
             ->where('expires_at', '>', now())
+            ->when($tenantId, fn($q, $id) => $q->whereIn('managed_tenant_id', function($sq) use ($id) { $sq->select('id')->from('managed_tenants')->where('tenant_id', $id); }))
             ->count();
 
         $criticalFindings = DB::table('findings')
             ->where('status', 'open')
             ->where('severity', 'critical')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->count();
 
         $highFindings = DB::table('findings')
             ->where('status', 'open')
             ->where('severity', 'high')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->count();
 
         $recentScores = DB::table('scores')
             ->join('managed_tenants', 'scores.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->when($tenantId, fn($q, $id) => $q->where('scores.tenant_id', $id))
             ->orderByDesc('scores.calculated_at')
             ->limit(20)
             ->get([
@@ -175,8 +186,10 @@ class TenantController extends Controller
         ], 202);
     }
 
-    public function integrationHealth(): JsonResponse
+    public function integrationHealth(Request $request): JsonResponse
     {
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
         $integrations = DB::table('integrations')->get(['id', 'slug', 'name', 'status']);
 
         $syncStats = DB::table('sync_runs')
@@ -187,11 +200,13 @@ class TenantController extends Controller
                 DB::raw("SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed"),
                 DB::raw('MAX(finished_at) as last_run'),
             ])
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->groupBy('sync_job')
             ->get();
 
         $recentErrors = DB::table('sync_runs')
             ->where('status', 'failed')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->orderByDesc('created_at')
             ->limit(10)
             ->get(['tenant_id', 'sync_job', 'started_at', 'finished_at']);
@@ -203,22 +218,27 @@ class TenantController extends Controller
         ]);
     }
 
-    public function securityStats(): JsonResponse
+    public function securityStats(Request $request): JsonResponse
     {
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
         $findingsBySeverity = DB::table('findings')
             ->where('status', 'open')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->select(['severity', DB::raw('COUNT(*) as count')])
             ->groupBy('severity')
             ->get();
 
         $findingsByCategory = DB::table('findings')
             ->where('status', 'open')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->select(['category', DB::raw('COUNT(*) as count')])
             ->groupBy('category')
             ->get();
 
         $scoreDistribution = DB::table('scores')
             ->join('managed_tenants', 'scores.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->when($tenantId, fn($q, $id) => $q->where('scores.tenant_id', $id))
             ->select([
                 'scores.tenant_id',
                 'managed_tenants.customer_name',
@@ -235,6 +255,7 @@ class TenantController extends Controller
             ->get();
 
         $gdapCoverage = DB::table('managed_tenants')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->select([
                 DB::raw("SUM(CASE WHEN gdap_status = 'active' THEN 1 ELSE 0 END) as active"),
                 DB::raw("SUM(CASE WHEN gdap_status = 'expired' THEN 1 ELSE 0 END) as expired"),
@@ -251,14 +272,18 @@ class TenantController extends Controller
         ]);
     }
 
-    public function operationsStats(): JsonResponse
+    public function operationsStats(Request $request): JsonResponse
     {
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
         $recentSyncRuns = DB::table('sync_runs')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->orderByDesc('created_at')
             ->limit(50)
             ->get(['id', 'tenant_id', 'sync_job', 'status', 'records_processed', 'started_at', 'finished_at']);
 
         $syncSummary = DB::table('sync_runs')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->select([
                 DB::raw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed"),
                 DB::raw("SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed"),
@@ -272,12 +297,14 @@ class TenantController extends Controller
                 $q->where('last_sync_at', '<', now()->subDays(7))
                     ->orWhereNull('last_sync_at');
             })
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->orderBy('last_sync_at')
             ->limit(20)
             ->get(['tenant_id', 'customer_name', 'last_sync_at']);
 
         $openAlerts = DB::table('alerts')
             ->where('status', 'open')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->count();
 
         return ApiResponse::success([
@@ -288,12 +315,15 @@ class TenantController extends Controller
         ]);
     }
 
-    public function identityLicensingSummary(): JsonResponse
+    public function identityLicensingSummary(Request $request): JsonResponse
     {
-        $enabledUsers = DB::table('users_normalized')->where('account_enabled', true)->count();
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
+        $enabledUsers = DB::table('users_normalized')->where('account_enabled', true)->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))->count();
         $mfaRegistered = DB::table('users_normalized')
             ->where('account_enabled', true)
             ->where('mfa_registered', true)
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->count();
         $mfaCoveragePercent = $enabledUsers > 0 ? round(($mfaRegistered / $enabledUsers) * 100, 1) : 0;
 
@@ -303,15 +333,17 @@ class TenantController extends Controller
                 $q->where('last_sign_in_at', '<', now()->subDays(90))
                   ->orWhereNull('last_sign_in_at');
             })
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->count();
 
         $riskyUsers = DB::table('risky_users')
             ->whereIn('risk_level', ['high', 'medium'])
             ->where('risk_state', 'atRisk')
+            ->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))
             ->count();
 
-        $totalLicenses = (int) DB::table('licenses')->sum('total_units');
-        $assignedLicenses = (int) DB::table('licenses')->sum('assigned_units');
+        $totalLicenses = (int) DB::table('licenses')->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))->sum('total_units');
+        $assignedLicenses = (int) DB::table('licenses')->when($tenantId, fn($q, $id) => $q->where('tenant_id', $id))->sum('assigned_units');
         $licenseWastePercent = $totalLicenses > 0
             ? round((($totalLicenses - $assignedLicenses) / $totalLicenses) * 100, 1)
             : 0;

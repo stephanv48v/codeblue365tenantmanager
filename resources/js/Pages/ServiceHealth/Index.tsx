@@ -11,6 +11,9 @@ import ChartCard from '../../Components/ChartCard';
 import PageHeader from '../../Components/PageHeader';
 import StatusBadge from '../../Components/StatusBadge';
 import SkeletonLoader from '../../Components/SkeletonLoader';
+import SectionHeader from '../../Components/SectionHeader';
+import FilterBar from '../../Components/FilterBar';
+import PaginationControls from '../../Components/PaginationControls';
 import { useServiceHealthData } from './hooks/useServiceHealthData';
 
 const classificationVariant = (classification: string) => {
@@ -29,7 +32,23 @@ const statusVariant = (status: string) => {
 };
 
 export default function ServiceHealthIndex() {
-    const { overview, loading } = useServiceHealthData();
+    const {
+        overview, loading,
+        events, eventsPagination, eventsLoading,
+        filters, setFilters, fetchEvents,
+    } = useServiceHealthData();
+
+    const handleFilterChange = (key: string, value: string) => {
+        const newFilters = { ...filters, [key]: value };
+        setFilters(newFilters);
+        fetchEvents(1, eventsPagination.per_page, newFilters);
+    };
+
+    const handleReset = () => {
+        const empty = { classification: '', service: '', status: '' };
+        setFilters(empty);
+        fetchEvents(1, eventsPagination.per_page, empty);
+    };
 
     if (loading) {
         return (
@@ -48,6 +67,8 @@ export default function ServiceHealthIndex() {
         name: s.service,
         events: s.count,
     }));
+
+    const serviceOptions = d.events_by_service.map((s) => ({ value: s.service, label: s.service }));
 
     return (
         <AppLayout title="Service Health">
@@ -117,6 +138,92 @@ export default function ServiceHealthIndex() {
                         )}
                     </div>
                 </div>
+            </div>
+
+            {/* Filterable Events Table */}
+            <div className="mb-4">
+                <SectionHeader title="All Events" subtitle="Browse and filter service health events" />
+            </div>
+
+            <div className="mb-4">
+                <FilterBar
+                    filters={[
+                        { key: 'classification', label: 'All Types', options: [
+                            { value: 'incident', label: 'Incident' },
+                            { value: 'advisory', label: 'Advisory' },
+                        ]},
+                        { key: 'service', label: 'All Services', options: serviceOptions },
+                        { key: 'status', label: 'All Statuses', options: [
+                            { value: 'investigating', label: 'Investigating' },
+                            { value: 'serviceInterruption', label: 'Service Interruption' },
+                            { value: 'serviceRestored', label: 'Service Restored' },
+                            { value: 'resolved', label: 'Resolved' },
+                            { value: 'serviceOperational', label: 'Operational' },
+                        ]},
+                    ]}
+                    values={filters}
+                    onChange={handleFilterChange}
+                    onReset={handleReset}
+                />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white">
+                {eventsLoading ? (
+                    <div className="p-6"><SkeletonLoader variant="table" count={8} /></div>
+                ) : (
+                    <>
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                                    <th className="px-4 py-3">Type</th>
+                                    <th className="px-4 py-3">Service</th>
+                                    <th className="px-4 py-3">Title</th>
+                                    <th className="px-4 py-3">Tenant</th>
+                                    <th className="px-4 py-3">Status</th>
+                                    <th className="px-4 py-3">Start</th>
+                                    <th className="px-4 py-3">End</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {events.map((ev) => (
+                                    <tr key={ev.id} className="border-b last:border-0 hover:bg-slate-50/50">
+                                        <td className="px-4 py-3">
+                                            <StatusBadge variant={classificationVariant(ev.classification)} label={ev.classification} />
+                                        </td>
+                                        <td className="px-4 py-3 font-medium text-slate-700">{ev.service}</td>
+                                        <td className="max-w-xs truncate px-4 py-3 text-slate-600">{ev.title}</td>
+                                        <td className="px-4 py-3 text-xs text-slate-500">{ev.customer_name ?? ev.tenant_id.slice(0, 12) + '...'}</td>
+                                        <td className="px-4 py-3"><StatusBadge variant={statusVariant(ev.status)} label={ev.status} /></td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                                            {ev.start_at ? new Date(ev.start_at).toLocaleDateString() : '-'}
+                                        </td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                                            {ev.end_at ? new Date(ev.end_at).toLocaleDateString() : 'Ongoing'}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {events.length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                                            No events match your filters.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+
+                        {eventsPagination.total > 0 && (
+                            <PaginationControls
+                                currentPage={eventsPagination.current_page}
+                                lastPage={eventsPagination.last_page}
+                                perPage={eventsPagination.per_page}
+                                total={eventsPagination.total}
+                                onPageChange={(page) => fetchEvents(page, eventsPagination.per_page)}
+                                onPerPageChange={(pp) => fetchEvents(1, pp)}
+                            />
+                        )}
+                    </>
+                )}
             </div>
         </AppLayout>
     );

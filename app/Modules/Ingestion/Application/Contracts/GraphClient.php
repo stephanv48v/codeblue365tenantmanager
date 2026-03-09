@@ -41,4 +41,10 @@ interface GraphClient
 
     /** @return array<string, mixed> */
     public function fetchSharePointUsage(string $tenantId): array;
+
+    /** @return array<int, array<string, mixed>> */
+    public function fetchCopilotUsage(string $tenantId): array;
+
+    /** @return array<int, array<string, mixed>> */
+    public function fetchSharePointSites(string $tenantId): array;
 }

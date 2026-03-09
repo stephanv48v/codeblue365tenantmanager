@@ -6,19 +6,23 @@ namespace App\Modules\Licensing\Http\Controllers;
 
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 
 class LicensingController extends Controller
 {
-    public function overview(): JsonResponse
+    public function overview(Request $request): JsonResponse
     {
-        $totalLicenses = (int) DB::table('licenses')->sum('total');
-        $assigned = (int) DB::table('licenses')->sum('assigned');
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
+        $totalLicenses = (int) DB::table('licenses')->when($tenantId, fn($q, $id) => $q->where('licenses.tenant_id', $id))->sum('total');
+        $assigned = (int) DB::table('licenses')->when($tenantId, fn($q, $id) => $q->where('licenses.tenant_id', $id))->sum('assigned');
         $available = $totalLicenses - $assigned;
         $wastePercent = $totalLicenses > 0 ? round(($available / $totalLicenses) * 100, 1) : 0;
 
         $topSkus = DB::table('licenses')
+            ->when($tenantId, fn($q, $id) => $q->where('licenses.tenant_id', $id))
             ->select([
                 'sku_name',
                 DB::raw('SUM(total) as total'),
@@ -32,6 +36,7 @@ class LicensingController extends Controller
 
         $perTenantUtilization = DB::table('licenses')
             ->join('managed_tenants', 'licenses.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->when($tenantId, fn($q, $id) => $q->where('licenses.tenant_id', $id))
             ->select([
                 'managed_tenants.customer_name',
                 'licenses.tenant_id',

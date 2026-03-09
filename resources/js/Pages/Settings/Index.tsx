@@ -7,6 +7,7 @@ import {
     PuzzlePieceIcon,
     ChartBarIcon,
     BellIcon,
+    AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline';
 import PartnerTenantSection from './sections/PartnerTenantSection';
 import TenantDiscoverySection from './sections/TenantDiscoverySection';
@@ -14,6 +15,7 @@ import AccessControlSection from './sections/AccessControlSection';
 import IntegrationsSection from './sections/IntegrationsSection';
 import ScoringSection from './sections/ScoringSection';
 import NotificationsSection from './sections/NotificationsSection';
+import ThresholdsSection from './sections/ThresholdsSection';
 
 const sections = [
     { id: 'partner-tenant', label: 'Partner Tenant', icon: BuildingOfficeIcon },
@@ -22,6 +24,7 @@ const sections = [
     { id: 'integrations', label: 'Integrations', icon: PuzzlePieceIcon },
     { id: 'scoring', label: 'Scoring', icon: ChartBarIcon },
     { id: 'notifications', label: 'Notifications', icon: BellIcon },
+    { id: 'thresholds', label: 'Thresholds', icon: AdjustmentsHorizontalIcon },
 ] as const;
 
 type SectionId = (typeof sections)[number]['id'];
@@ -64,6 +67,7 @@ export default function SettingsIndex() {
                     {activeSection === 'integrations' && <IntegrationsSection />}
                     {activeSection === 'scoring' && <ScoringSection />}
                     {activeSection === 'notifications' && <NotificationsSection />}
+                    {activeSection === 'thresholds' && <ThresholdsSection />}
                 </div>
             </div>
         </AppLayout>

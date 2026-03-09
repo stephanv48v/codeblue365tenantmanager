@@ -25,6 +25,8 @@ class IntegrationsSeeder extends Seeder
             ['slug' => 'risky-users', 'name' => 'Identity Protection / Risky Users'],
             ['slug' => 'mailbox-usage', 'name' => 'Exchange Online Usage'],
             ['slug' => 'sharepoint-usage', 'name' => 'SharePoint & OneDrive Usage'],
+            ['slug' => 'copilot-usage', 'name' => 'Microsoft 365 Copilot Usage'],
+            ['slug' => 'sharepoint-governance', 'name' => 'SharePoint Governance & Readiness'],
         ];
 
         foreach ($integrations as $integration) {

@@ -12,15 +12,18 @@ use Illuminate\Support\Facades\DB;
 
 class IdentityDashboardController extends Controller
 {
-    public function overview(): JsonResponse
+    public function overview(Request $request): JsonResponse
     {
-        $totalUsers = DB::table('users_normalized')->count();
-        $enabledUsers = DB::table('users_normalized')->where('account_enabled', true)->count();
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
+        $totalUsers = DB::table('users_normalized')->when($tenantId, fn($q, $id) => $q->where('users_normalized.tenant_id', $id))->count();
+        $enabledUsers = DB::table('users_normalized')->where('account_enabled', true)->when($tenantId, fn($q, $id) => $q->where('users_normalized.tenant_id', $id))->count();
         $disabledUsers = $totalUsers - $enabledUsers;
 
         $mfaRegistered = DB::table('users_normalized')
             ->where('account_enabled', true)
             ->where('mfa_registered', true)
+            ->when($tenantId, fn($q, $id) => $q->where('users_normalized.tenant_id', $id))
             ->count();
         $mfaCoveragePercent = $enabledUsers > 0 ? round(($mfaRegistered / $enabledUsers) * 100, 1) : 0;
 
@@ -30,18 +33,29 @@ class IdentityDashboardController extends Controller
                 $q->where('last_sign_in_at', '<', now()->subDays(90))
                   ->orWhereNull('last_sign_in_at');
             })
+            ->when($tenantId, fn($q, $id) => $q->where('users_normalized.tenant_id', $id))
             ->count();
 
         $riskyUsers = DB::table('risky_users')
             ->whereIn('risk_level', ['high', 'medium'])
             ->where('risk_state', 'atRisk')
+            ->when($tenantId, fn($q, $id) => $q->where('risky_users.tenant_id', $id))
             ->count();
 
-        $caPolicies = DB::table('conditional_access_policies')->count();
+        $caPolicies = DB::table('conditional_access_policies')
+            ->when($tenantId, fn($q, $id) => $q->where('conditional_access_policies.tenant_id', $id))
+            ->count();
+
+        $enabledNoMfa = DB::table('users_normalized')
+            ->where('account_enabled', true)
+            ->where('mfa_registered', false)
+            ->when($tenantId, fn($q, $id) => $q->where('users_normalized.tenant_id', $id))
+            ->count();
 
         $mfaByTenant = DB::table('users_normalized')
             ->join('managed_tenants', 'users_normalized.tenant_id', '=', 'managed_tenants.tenant_id')
             ->where('users_normalized.account_enabled', true)
+            ->when($tenantId, fn($q, $id) => $q->where('users_normalized.tenant_id', $id))
             ->select([
                 'managed_tenants.customer_name',
                 'users_normalized.tenant_id',
@@ -53,6 +67,7 @@ class IdentityDashboardController extends Controller
             ->get();
 
         $riskyByLevel = DB::table('risky_users')
+            ->when($tenantId, fn($q, $id) => $q->where('risky_users.tenant_id', $id))
             ->select(['risk_level', DB::raw('COUNT(*) as count')])
             ->groupBy('risk_level')
             ->get();
@@ -66,6 +81,7 @@ class IdentityDashboardController extends Controller
             'stale_users' => $staleUsers,
             'risky_users_count' => $riskyUsers,
             'ca_policies_count' => $caPolicies,
+            'enabled_no_mfa' => $enabledNoMfa,
             'mfa_by_tenant' => $mfaByTenant,
             'risky_by_level' => $riskyByLevel,
         ]);
@@ -93,6 +109,11 @@ class IdentityDashboardController extends Controller
             }
         }
 
+        if ($request->filled('account_enabled')) {
+            $enabled = (string) $request->string('account_enabled');
+            $query->where('users_normalized.account_enabled', $enabled === 'enabled');
+        }
+
         if ($request->boolean('stale')) {
             $query->where('users_normalized.account_enabled', true)
                 ->where(function ($q): void {
@@ -105,7 +126,8 @@ class IdentityDashboardController extends Controller
             $search = (string) $request->string('search');
             $query->where(function ($q) use ($search): void {
                 $q->where('users_normalized.display_name', 'like', "%{$search}%")
-                  ->orWhere('users_normalized.user_principal_name', 'like', "%{$search}%");
+                  ->orWhere('users_normalized.user_principal_name', 'like', "%{$search}%")
+                  ->orWhere('managed_tenants.customer_name', 'like', "%{$search}%");
             });
         }
 

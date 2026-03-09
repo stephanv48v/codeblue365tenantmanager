@@ -5,6 +5,7 @@ import StatCard from '../../Components/StatCard';
 import StatusBadge from '../../Components/StatusBadge';
 import SkeletonLoader from '../../Components/SkeletonLoader';
 import { ExclamationTriangleIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { useTenantScope } from '../../hooks/useTenantScope';
 
 type RiskyUser = {
     id: number;
@@ -46,18 +47,20 @@ const riskStateVariant = (state: string) => {
 };
 
 export default function RiskyUsers() {
+    const { selectedTenantId, buildUrl } = useTenantScope();
     const [data, setData] = useState<RiskyUsersResponse | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/api/v1/identity/risky-users')
+        setLoading(true);
+        fetch(buildUrl('/api/v1/identity/risky-users'))
             .then((r) => r.json())
             .then((res) => {
                 setData(res.success ? res.data : null);
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, []);
+    }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (loading) {
         return (

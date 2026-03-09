@@ -31,6 +31,10 @@ class DemoDataSeeder extends Seeder
         $this->seedAlerts();
         $this->seedSyncRuns();
         $this->seedRecommendations();
+        $this->seedCopilotUsage();
+        $this->seedCopilotAgents();
+        $this->seedSharePointSites();
+        $this->seedCopilotReadiness();
     }
 
     // ─── Tenants ──────────────────────────────────────────────
@@ -784,6 +788,341 @@ class DemoDataSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+        }
+    }
+
+    // ─── Copilot Usage ───────────────────────────────────────
+
+    private function seedCopilotUsage(): void
+    {
+        $tenants = DB::table('managed_tenants')
+            ->where('gdap_status', '!=', 'pending')
+            ->get();
+
+        $firstNames = ['Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Ethan', 'Sophia', 'Mason', 'Isabella', 'Logan', 'Mia', 'Lucas', 'Charlotte', 'Alexander', 'Amelia', 'Henry', 'Harper', 'Daniel', 'Ella', 'Michael', 'Grace', 'James', 'Lily', 'Benjamin', 'Chloe', 'William', 'Zoey', 'David', 'Aria', 'Jack', 'Riley', 'Owen', 'Nora', 'Samuel', 'Layla', 'Ryan'];
+        $lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Wilson', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson', 'White', 'Harris', 'Martin', 'Thompson'];
+
+        foreach ($tenants as $tenant) {
+            $userCount = rand(15, 30);
+            $licenseRate = $tenant->primary_domain === 'litware.io' ? 0.30 : 0.60;
+
+            $rows = [];
+            for ($i = 0; $i < $userCount; $i++) {
+                $first = $firstNames[array_rand($firstNames)];
+                $last = $lastNames[array_rand($lastNames)];
+                $upn = strtolower("{$first}.{$last}") . rand(1, 99) . '@' . $tenant->primary_domain;
+                $licensed = (rand(1, 100) / 100) <= $licenseRate;
+
+                // Activity dates - only licensed users can have activity
+                $hasActivity = $licensed && (rand(1, 100) > 20); // 80% of licensed users are active
+                $lastActivityDate = $hasActivity ? now()->subDays(rand(0, 30))->toDateString() : null;
+
+                // Per-app usage - randomize which apps each user uses
+                $teamsDate = $hasActivity && rand(1, 100) <= 85 ? now()->subDays(rand(0, 14))->toDateString() : null;
+                $outlookDate = $hasActivity && rand(1, 100) <= 75 ? now()->subDays(rand(0, 20))->toDateString() : null;
+                $wordDate = $hasActivity && rand(1, 100) <= 60 ? now()->subDays(rand(0, 25))->toDateString() : null;
+                $excelDate = $hasActivity && rand(1, 100) <= 50 ? now()->subDays(rand(0, 25))->toDateString() : null;
+                $pptDate = $hasActivity && rand(1, 100) <= 40 ? now()->subDays(rand(0, 28))->toDateString() : null;
+                $onenoteDate = $hasActivity && rand(1, 100) <= 30 ? now()->subDays(rand(0, 30))->toDateString() : null;
+                $copilotChatDate = $hasActivity && rand(1, 100) <= 45 ? now()->subDays(rand(0, 20))->toDateString() : null;
+
+                $rows[] = [
+                    'tenant_id' => $tenant->tenant_id,
+                    'user_principal_name' => $upn,
+                    'display_name' => "{$first} {$last}",
+                    'last_activity_date' => $lastActivityDate,
+                    'last_activity_teams' => $teamsDate,
+                    'last_activity_word' => $wordDate,
+                    'last_activity_excel' => $excelDate,
+                    'last_activity_powerpoint' => $pptDate,
+                    'last_activity_outlook' => $outlookDate,
+                    'last_activity_onenote' => $onenoteDate,
+                    'last_activity_copilot_chat' => $copilotChatDate,
+                    'copilot_license_assigned' => $licensed,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            foreach (array_chunk($rows, 50) as $chunk) {
+                DB::table('copilot_usage')->insert($chunk);
+            }
+        }
+    }
+
+    // ─── Copilot Agents ──────────────────────────────────────
+
+    private function seedCopilotAgents(): void
+    {
+        $tenants = DB::table('managed_tenants')
+            ->where('gdap_status', '!=', 'pending')
+            ->get();
+
+        $agentPool = [
+            ['name' => 'HR Benefits Assistant', 'desc' => 'Helps employees find information about benefits, PTO policies, and HR procedures.', 'sources' => ['SharePoint:HR Policies', 'SharePoint:Employee Handbook']],
+            ['name' => 'IT Helpdesk Bot', 'desc' => 'Assists with common IT support requests including password resets and software installation guides.', 'sources' => ['SharePoint:IT Knowledge Base', 'SharePoint:Software Catalog']],
+            ['name' => 'Sales Proposal Generator', 'desc' => 'Generates customized sales proposals based on client requirements and product catalog.', 'sources' => ['SharePoint:Sales Resources', 'SharePoint:Product Catalog', 'SharePoint:Pricing Sheets']],
+            ['name' => 'Legal Document Reviewer', 'desc' => 'Reviews contracts and legal documents for standard compliance terms and flags potential issues.', 'sources' => ['SharePoint:Legal Templates', 'SharePoint:Compliance Policies']],
+            ['name' => 'Project Status Summarizer', 'desc' => 'Aggregates project updates from multiple sources and generates executive summaries.', 'sources' => ['SharePoint:Project Alpha', 'SharePoint:Project Tracking']],
+            ['name' => 'Customer Support Agent', 'desc' => 'Provides first-line support responses for common customer inquiries and troubleshooting.', 'sources' => ['SharePoint:Customer Portal', 'SharePoint:FAQ Database']],
+            ['name' => 'Finance Report Analyst', 'desc' => 'Analyzes financial reports and provides key insights on budget variances and trends.', 'sources' => ['SharePoint:Finance Reports', 'SharePoint:Budget Tracking']],
+            ['name' => 'Engineering Knowledge Base', 'desc' => 'Answers technical questions using internal engineering documentation and architecture guides.', 'sources' => ['SharePoint:Engineering Wiki', 'SharePoint:Architecture Docs']],
+        ];
+
+        $creators = ['admin@', 'sarah.chen@', 'james.wilson@', 'tom.barrett@'];
+
+        foreach ($tenants as $tenant) {
+            $agentCount = rand(2, 5);
+            $selectedIndexes = array_rand($agentPool, $agentCount);
+            if (!is_array($selectedIndexes)) $selectedIndexes = [$selectedIndexes];
+
+            foreach ($selectedIndexes as $idx) {
+                $agent = $agentPool[$idx];
+                $isDeclarative = rand(1, 100) <= 70;
+                $status = rand(1, 100) <= 85 ? 'active' : 'disabled';
+
+                DB::table('copilot_agents')->insert([
+                    'tenant_id' => $tenant->tenant_id,
+                    'agent_id' => Str::uuid()->toString(),
+                    'display_name' => $agent['name'],
+                    'description' => $agent['desc'],
+                    'agent_type' => $isDeclarative ? 'declarative' : 'custom_engine',
+                    'status' => $status,
+                    'created_by' => $creators[array_rand($creators)] . $tenant->primary_domain,
+                    'data_sources' => json_encode($agent['sources']),
+                    'last_activity_at' => $status === 'active' ? now()->subHours(rand(1, 168)) : null,
+                    'interaction_count' => $status === 'active' ? rand(50, 5000) : rand(0, 50),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    // ─── SharePoint Sites ────────────────────────────────────
+
+    private function seedSharePointSites(): void
+    {
+        $tenants = DB::table('managed_tenants')
+            ->where('gdap_status', '!=', 'pending')
+            ->get();
+
+        $sitePool = [
+            ['name' => 'Company Intranet', 'template' => 'SITEPAGEPUBLISHING#0', 'path' => '/sites/intranet'],
+            ['name' => 'HR Portal', 'template' => 'SITEPAGEPUBLISHING#0', 'path' => '/sites/hr'],
+            ['name' => 'Engineering Wiki', 'template' => 'STS#3', 'path' => '/sites/engineering'],
+            ['name' => 'Sales Resources', 'template' => 'STS#3', 'path' => '/sites/sales'],
+            ['name' => 'Executive Dashboard', 'template' => 'SITEPAGEPUBLISHING#0', 'path' => '/sites/executive'],
+            ['name' => 'Legal Documents', 'template' => 'STS#3', 'path' => '/sites/legal'],
+            ['name' => 'Marketing Hub', 'template' => 'SITEPAGEPUBLISHING#0', 'path' => '/sites/marketing'],
+            ['name' => 'Finance Reports', 'template' => 'STS#3', 'path' => '/sites/finance'],
+            ['name' => 'IT Knowledge Base', 'template' => 'STS#3', 'path' => '/sites/it-kb'],
+            ['name' => 'Project Alpha', 'template' => 'STS#3', 'path' => '/sites/project-alpha'],
+            ['name' => 'Customer Portal', 'template' => 'SITEPAGEPUBLISHING#0', 'path' => '/sites/customer-portal'],
+            ['name' => 'Training Materials', 'template' => 'STS#3', 'path' => '/sites/training'],
+            ['name' => 'All Company', 'template' => 'SITEPAGEPUBLISHING#0', 'path' => '/sites/all-company'],
+            ['name' => 'Product Development', 'template' => 'STS#3', 'path' => '/sites/product-dev'],
+            ['name' => 'Shared Documents', 'template' => 'STS#3', 'path' => '/sites/shared-docs'],
+        ];
+
+        $sensitivityLabels = ['Confidential', 'Internal', 'Public', 'Highly Confidential', null, null, null, null];
+        $sharingOptions = ['org', 'org', 'org', 'existing', 'existing', 'anyone', 'disabled'];
+
+        $ownerNames = ['Sarah Chen', 'James Wilson', 'Tom Barrett', 'Emily Parker', 'Mark Stevens', 'Lisa Rodriguez'];
+
+        foreach ($tenants as $tenant) {
+            $siteCount = rand(8, 15);
+            $selectedIndexes = array_rand($sitePool, $siteCount);
+            if (!is_array($selectedIndexes)) $selectedIndexes = [$selectedIndexes];
+
+            $anyoneCount = 0;
+
+            foreach ($selectedIndexes as $idx) {
+                $site = $sitePool[$idx];
+                $domain = str_replace('.', '-', $tenant->primary_domain);
+                $siteUrl = "https://{$domain}.sharepoint.com{$site['path']}";
+
+                // Control external sharing - ensure 2-3 "anyone" sites per tenant
+                $sharing = $sharingOptions[array_rand($sharingOptions)];
+                if ($anyoneCount >= 3) {
+                    $sharing = collect(['org', 'existing', 'disabled'])->random();
+                }
+                if ($sharing === 'anyone') $anyoneCount++;
+
+                $isPublic = rand(1, 100) <= 20;
+                $hasGuest = rand(1, 100) <= 15;
+                $label = $sensitivityLabels[array_rand($sensitivityLabels)];
+
+                $storageUsed = rand(100, 50000) * 1024 * 1024; // 100MB to ~50GB
+                $storageAllocated = $storageUsed + rand(1000, 50000) * 1024 * 1024;
+                $fileCount = rand(50, 10000);
+                $activeFiles = (int) round($fileCount * (rand(10, 60) / 100));
+
+                $permissionedUsers = $sharing === 'anyone'
+                    ? rand(200, 500)
+                    : rand(5, 150);
+
+                $ownerName = $ownerNames[array_rand($ownerNames)];
+                $ownerEmail = strtolower(str_replace(' ', '.', $ownerName)) . '@' . $tenant->primary_domain;
+
+                DB::table('sharepoint_sites')->insert([
+                    'tenant_id' => $tenant->tenant_id,
+                    'site_id' => Str::uuid()->toString(),
+                    'site_url' => $siteUrl,
+                    'display_name' => $site['name'],
+                    'storage_used_bytes' => $storageUsed,
+                    'storage_allocated_bytes' => $storageAllocated,
+                    'file_count' => $fileCount,
+                    'active_file_count' => $activeFiles,
+                    'last_activity_date' => now()->subDays(rand(0, 30))->toDateString(),
+                    'page_view_count' => rand(10, 50000),
+                    'external_sharing' => $sharing,
+                    'is_public' => $isPublic,
+                    'owner_name' => $ownerName,
+                    'owner_email' => $ownerEmail,
+                    'sensitivity_label' => $label,
+                    'site_template' => $site['template'],
+                    'has_guest_access' => $hasGuest,
+                    'permissioned_user_count' => $permissionedUsers,
+                    'restricted_content_discovery' => rand(1, 100) <= 10,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    // ─── Copilot Readiness ───────────────────────────────────
+
+    private function seedCopilotReadiness(): void
+    {
+        $profiles = [
+            'a1b2c3d4-1111-4000-8000-000000000001' => [ // Contoso - good (82)
+                'overall_score' => 82.00,
+                'data_exposure_score' => 78.50,
+                'access_governance_score' => 85.00,
+                'data_protection_score' => 80.00,
+                'ai_governance_score' => 84.50,
+                'copilot_licensed_users' => 52,
+                'copilot_active_users' => 41,
+                'sites_with_everyone_access' => 3,
+                'sites_with_external_sharing' => 4,
+                'sites_with_guest_access' => 2,
+                'public_sites_count' => 2,
+                'sensitivity_labels_count' => 4,
+                'sensitivity_labels_applied_pct' => 72.00,
+                'm365_apps_on_current_channel_pct' => 88.00,
+            ],
+            'a1b2c3d4-2222-4000-8000-000000000002' => [ // Northwind - decent (68)
+                'overall_score' => 68.00,
+                'data_exposure_score' => 62.00,
+                'access_governance_score' => 70.50,
+                'data_protection_score' => 65.00,
+                'ai_governance_score' => 74.50,
+                'copilot_licensed_users' => 25,
+                'copilot_active_users' => 16,
+                'sites_with_everyone_access' => 5,
+                'sites_with_external_sharing' => 6,
+                'sites_with_guest_access' => 3,
+                'public_sites_count' => 4,
+                'sensitivity_labels_count' => 3,
+                'sensitivity_labels_applied_pct' => 48.00,
+                'm365_apps_on_current_channel_pct' => 72.00,
+            ],
+            'a1b2c3d4-3333-4000-8000-000000000003' => [ // Adventure Works - decent (75)
+                'overall_score' => 75.00,
+                'data_exposure_score' => 72.00,
+                'access_governance_score' => 78.00,
+                'data_protection_score' => 74.50,
+                'ai_governance_score' => 76.00,
+                'copilot_licensed_users' => 70,
+                'copilot_active_users' => 55,
+                'sites_with_everyone_access' => 4,
+                'sites_with_external_sharing' => 5,
+                'sites_with_guest_access' => 2,
+                'public_sites_count' => 3,
+                'sensitivity_labels_count' => 4,
+                'sensitivity_labels_applied_pct' => 65.00,
+                'm365_apps_on_current_channel_pct' => 80.00,
+            ],
+            'a1b2c3d4-4444-4000-8000-000000000004' => [ // Fabrikam - poor (45)
+                'overall_score' => 45.00,
+                'data_exposure_score' => 38.00,
+                'access_governance_score' => 42.50,
+                'data_protection_score' => 50.00,
+                'ai_governance_score' => 49.50,
+                'copilot_licensed_users' => 30,
+                'copilot_active_users' => 12,
+                'sites_with_everyone_access' => 8,
+                'sites_with_external_sharing' => 10,
+                'sites_with_guest_access' => 6,
+                'public_sites_count' => 7,
+                'sensitivity_labels_count' => 2,
+                'sensitivity_labels_applied_pct' => 22.00,
+                'm365_apps_on_current_channel_pct' => 55.00,
+            ],
+            'a1b2c3d4-5555-4000-8000-000000000005' => [ // Woodgrove Bank - excellent (91)
+                'overall_score' => 91.00,
+                'data_exposure_score' => 92.50,
+                'access_governance_score' => 94.00,
+                'data_protection_score' => 88.00,
+                'ai_governance_score' => 90.00,
+                'copilot_licensed_users' => 120,
+                'copilot_active_users' => 105,
+                'sites_with_everyone_access' => 0,
+                'sites_with_external_sharing' => 1,
+                'sites_with_guest_access' => 1,
+                'public_sites_count' => 0,
+                'sensitivity_labels_count' => 5,
+                'sensitivity_labels_applied_pct' => 95.00,
+                'm365_apps_on_current_channel_pct' => 96.00,
+            ],
+            'a1b2c3d4-6666-4000-8000-000000000006' => [ // Litware - terrible (28)
+                'overall_score' => 28.00,
+                'data_exposure_score' => 22.00,
+                'access_governance_score' => 25.00,
+                'data_protection_score' => 30.00,
+                'ai_governance_score' => 35.00,
+                'copilot_licensed_users' => 8,
+                'copilot_active_users' => 2,
+                'sites_with_everyone_access' => 10,
+                'sites_with_external_sharing' => 12,
+                'sites_with_guest_access' => 8,
+                'public_sites_count' => 9,
+                'sensitivity_labels_count' => 1,
+                'sensitivity_labels_applied_pct' => 8.00,
+                'm365_apps_on_current_channel_pct' => 35.00,
+            ],
+            'a1b2c3d4-8888-4000-8000-000000000008' => [ // Proseware - very good (85)
+                'overall_score' => 85.00,
+                'data_exposure_score' => 83.00,
+                'access_governance_score' => 88.00,
+                'data_protection_score' => 84.00,
+                'ai_governance_score' => 85.00,
+                'copilot_licensed_users' => 95,
+                'copilot_active_users' => 82,
+                'sites_with_everyone_access' => 1,
+                'sites_with_external_sharing' => 3,
+                'sites_with_guest_access' => 2,
+                'public_sites_count' => 1,
+                'sensitivity_labels_count' => 5,
+                'sensitivity_labels_applied_pct' => 82.00,
+                'm365_apps_on_current_channel_pct' => 92.00,
+            ],
+        ];
+
+        foreach ($profiles as $tenantId => $scores) {
+            DB::table('copilot_readiness')->insert(array_merge($scores, [
+                'tenant_id' => $tenantId,
+                'details' => json_encode([
+                    'assessment_version' => '1.0',
+                    'data_sources_evaluated' => ['SharePoint', 'OneDrive', 'Exchange', 'Teams'],
+                    'recommendations_count' => max(0, (int) round((100 - $scores['overall_score']) / 5)),
+                ]),
+                'calculated_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
         }
     }
 }

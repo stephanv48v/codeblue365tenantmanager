@@ -1,4 +1,4 @@
-type Variant = 'stat-card' | 'chart' | 'table-row' | 'text';
+type Variant = 'stat-card' | 'chart' | 'table-row' | 'table' | 'text';
 
 type Props = {
     variant?: Variant;
@@ -60,6 +60,7 @@ export default function SkeletonLoader({ variant = 'stat-card', count = 1, class
                     case 'chart':
                         return <ChartSkeleton key={i} />;
                     case 'table-row':
+                    case 'table':
                         return <TableRowSkeleton key={i} />;
                     case 'text':
                         return <TextSkeleton key={i} />;

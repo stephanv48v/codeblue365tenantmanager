@@ -16,6 +16,10 @@ import {
     KeyIcon,
     ExclamationTriangleIcon,
     SignalIcon,
+    SparklesIcon,
+    ChartBarIcon,
+    CpuChipIcon,
+    ServerStackIcon,
 } from '@heroicons/react/24/outline';
 import type { AuthUser, NavGroup } from '../types';
 import SidebarNavGroup from './SidebarNavGroup';
@@ -34,10 +38,18 @@ const navGroups: NavGroup[] = [
     {
         title: 'Identity',
         items: [
-            { label: 'Overview', href: '/identity', icon: UsersIcon, requiredRole: 'engineer' },
             { label: 'Users', href: '/identity/users', icon: UsersIcon, requiredRole: 'engineer' },
             { label: 'Risky Users', href: '/identity/risky-users', icon: ExclamationTriangleIcon, requiredRole: 'security-admin' },
             { label: 'Conditional Access', href: '/identity/conditional-access', icon: KeyIcon, requiredRole: 'security-admin' },
+        ],
+    },
+    {
+        title: 'Copilot',
+        items: [
+            { label: 'Readiness', href: '/copilot', icon: SparklesIcon, requiredRole: 'engineer' },
+            { label: 'Usage', href: '/copilot/usage', icon: ChartBarIcon, requiredRole: 'engineer' },
+            { label: 'Agents', href: '/copilot/agents', icon: CpuChipIcon, requiredRole: 'engineer' },
+            { label: 'SharePoint', href: '/copilot/sharepoint', icon: ServerStackIcon, requiredRole: 'engineer' },
         ],
     },
     {

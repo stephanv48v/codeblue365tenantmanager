@@ -15,13 +15,17 @@ Route::middleware(['auth'])->group(function (): void {
     Route::get('/integrations/health', fn () => Inertia::render('Integrations/Health'));
     Route::get('/playbooks', fn () => Inertia::render('Playbooks/Index'));
     Route::get('/playbooks/{slug}', fn (string $slug) => Inertia::render('Playbooks/Show', ['slug' => $slug]));
-    Route::get('/identity', fn () => Inertia::render('Identity/Index'));
+    Route::get('/identity', fn () => redirect('/identity/users'));
     Route::get('/identity/users', fn () => Inertia::render('Identity/Users'));
     Route::get('/identity/risky-users', fn () => Inertia::render('Identity/RiskyUsers'));
     Route::get('/identity/conditional-access', fn () => Inertia::render('Identity/ConditionalAccess'));
     Route::get('/devices', fn () => Inertia::render('Devices/Index'));
     Route::get('/licensing', fn () => Inertia::render('Licensing/Index'));
     Route::get('/service-health', fn () => Inertia::render('ServiceHealth/Index'));
+    Route::get('/copilot', fn () => Inertia::render('Copilot/Index'));
+    Route::get('/copilot/usage', fn () => Inertia::render('Copilot/Usage'));
+    Route::get('/copilot/agents', fn () => Inertia::render('Copilot/Agents'));
+    Route::get('/copilot/sharepoint', fn () => Inertia::render('Copilot/SharePoint'));
     Route::get('/findings', fn () => Inertia::render('Findings/Index'));
     Route::get('/security', fn () => Inertia::render('Security/Index'));
     Route::get('/operations', fn () => Inertia::render('Operations/Index'));

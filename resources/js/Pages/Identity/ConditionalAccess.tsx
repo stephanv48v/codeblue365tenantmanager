@@ -5,6 +5,7 @@ import StatCard from '../../Components/StatCard';
 import StatusBadge from '../../Components/StatusBadge';
 import SkeletonLoader from '../../Components/SkeletonLoader';
 import { KeyIcon, CheckCircleIcon, DocumentTextIcon, NoSymbolIcon } from '@heroicons/react/24/outline';
+import { useTenantScope } from '../../hooks/useTenantScope';
 
 type CaPolicy = {
     id: number;
@@ -44,18 +45,20 @@ const stateLabel = (state: string) => {
 };
 
 export default function ConditionalAccess() {
+    const { selectedTenantId, buildUrl } = useTenantScope();
     const [data, setData] = useState<CaResponse | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/api/v1/identity/conditional-access')
+        setLoading(true);
+        fetch(buildUrl('/api/v1/identity/conditional-access'))
             .then((r) => r.json())
             .then((res) => {
                 setData(res.success ? res.data : null);
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, []);
+    }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (loading) {
         return (

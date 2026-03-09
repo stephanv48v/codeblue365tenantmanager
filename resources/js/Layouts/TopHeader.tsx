@@ -6,6 +6,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Link } from '@inertiajs/react';
 import type { AuthUser } from '../types';
+import TenantSelector from '../Components/TenantSelector';
 
 type Props = {
     title: string;
@@ -23,7 +24,7 @@ export default function TopHeader({ title, user, onMenuToggle }: Props) {
 
     return (
         <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6">
-            {/* Left: hamburger + title */}
+            {/* Left: hamburger + title + tenant selector */}
             <div className="flex items-center gap-4">
                 <button
                     onClick={onMenuToggle}
@@ -31,7 +32,9 @@ export default function TopHeader({ title, user, onMenuToggle }: Props) {
                 >
                     <Bars3Icon className="h-6 w-6" />
                 </button>
-                <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+                <h1 className="hidden text-lg font-semibold text-slate-900 md:block">{title}</h1>
+                <span className="hidden h-6 w-px bg-slate-200 md:block" />
+                <TenantSelector />
             </div>
 
             {/* Center: search */}

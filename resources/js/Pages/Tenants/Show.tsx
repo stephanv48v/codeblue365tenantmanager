@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
 import StatusBadge from '../../Components/StatusBadge';
 import ChartCard from '../../Components/ChartCard';
 import SkeletonLoader from '../../Components/SkeletonLoader';
+import PaginationControls from '../../Components/PaginationControls';
 import ScoreGauge from '../Dashboard/components/ScoreGauge';
 import {
     HeartIcon,
@@ -110,33 +111,53 @@ function relativeTime(dateStr: string | null): string {
     return `${days}d ago`;
 }
 
+type SyncPagination = {
+    total: number;
+    per_page: number;
+    current_page: number;
+    last_page: number;
+};
+
 export default function TenantShow({ tenantId }: PageProps) {
     const [tenant, setTenant] = useState<TenantDetail | null>(null);
     const [gdapRelationships, setGdapRelationships] = useState<GdapRelationship[]>([]);
     const [scores, setScores] = useState<Score[]>([]);
     const [findings, setFindings] = useState<Finding[]>([]);
     const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
+    const [syncPagination, setSyncPagination] = useState<SyncPagination>({ total: 0, per_page: 25, current_page: 1, last_page: 1 });
+    const [syncLoading, setSyncLoading] = useState(false);
+    const [syncStatusFilter, setSyncStatusFilter] = useState('');
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('overview');
 
+    const fetchSyncHistory = useCallback(async (page = 1, perPage = 25, status?: string) => {
+        setSyncLoading(true);
+        const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+        const s = status ?? syncStatusFilter;
+        if (s) params.set('status', s);
+        try {
+            const res = await fetch(`/api/v1/sync/tenant/${tenantId}/history?${params}`);
+            const data = await res.json();
+            if (data.success) {
+                setSyncRuns(data.data.items ?? []);
+                setSyncPagination(data.data.pagination ?? { total: 0, per_page: perPage, current_page: 1, last_page: 1 });
+            }
+        } finally {
+            setSyncLoading(false);
+        }
+    }, [tenantId, syncStatusFilter]);
+
     useEffect(() => {
         async function load() {
             try {
-                const [tenantRes, opsRes] = await Promise.all([
-                    fetch(`/api/v1/tenants/${tenantId}`).then((r) => r.json()),
-                    fetch(`/api/v1/dashboard/operations`).then((r) => r.json()),
-                ]);
+                const tenantRes = await fetch(`/api/v1/tenants/${tenantId}`).then((r) => r.json());
                 if (tenantRes.success) {
                     setTenant(tenantRes.data.tenant ?? null);
                     setGdapRelationships(tenantRes.data.gdap_relationships ?? []);
                     setScores(tenantRes.data.scores ?? []);
                     setFindings(tenantRes.data.findings ?? []);
-                }
-                if (opsRes.success) {
-                    const allRuns: SyncRun[] = opsRes.data.recent_sync_runs ?? [];
-                    setSyncRuns(allRuns.filter((r: SyncRun) => r.tenant_id === tenantId).slice(0, 20));
                 }
             } finally {
                 setLoading(false);
@@ -144,7 +165,8 @@ export default function TenantShow({ tenantId }: PageProps) {
         }
 
         void load();
-    }, [tenantId]);
+        fetchSyncHistory();
+    }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const onSync = async () => {
         setSyncing(true);
@@ -451,52 +473,97 @@ export default function TenantShow({ tenantId }: PageProps) {
             )}
 
             {activeTab === 'sync' && (
-                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                    <div className="border-b border-slate-200 px-6 py-4">
-                        <h3 className="text-sm font-semibold text-slate-800">Sync History</h3>
+                <div className="space-y-4">
+                    {/* Status filter */}
+                    <div className="flex items-center gap-3">
+                        <select
+                            value={syncStatusFilter}
+                            onChange={(e) => {
+                                setSyncStatusFilter(e.target.value);
+                                fetchSyncHistory(1, syncPagination.per_page, e.target.value);
+                            }}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                            <option value="partial">Partial</option>
+                            <option value="running">Running</option>
+                        </select>
+                        {syncStatusFilter && (
+                            <button
+                                onClick={() => {
+                                    setSyncStatusFilter('');
+                                    fetchSyncHistory(1, syncPagination.per_page, '');
+                                }}
+                                className="text-xs text-slate-500 hover:text-slate-700"
+                            >
+                                Clear filter
+                            </button>
+                        )}
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="border-b border-slate-200 bg-slate-50">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Job</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-500">Records</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Started</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Finished</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {syncRuns.map((run) => (
-                                    <tr key={run.id} className="hover:bg-slate-50">
-                                        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">
-                                            {run.sync_job.replace('SyncTenant', '').replace('Job', '')}
-                                        </td>
-                                        <td className="whitespace-nowrap px-4 py-3">
-                                            <StatusBadge
-                                                variant={run.status === 'completed' ? 'success' : run.status === 'failed' ? 'critical' : 'warning'}
-                                                label={run.status}
-                                                dot
-                                            />
-                                        </td>
-                                        <td className="whitespace-nowrap px-4 py-3 text-right text-slate-600">{run.records_processed}</td>
-                                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
-                                            {new Date(run.started_at).toLocaleString()}
-                                        </td>
-                                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
-                                            {run.finished_at ? new Date(run.finished_at).toLocaleString() : '—'}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {syncRuns.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} className="py-12 text-center text-sm text-slate-400">
-                                            No sync runs found for this tenant.
-                                        </td>
-                                    </tr>
+
+                    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                        {syncLoading ? (
+                            <div className="p-6"><SkeletonLoader variant="table" count={8} /></div>
+                        ) : (
+                            <>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="border-b border-slate-200 bg-slate-50">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Job</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-500">Records</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Started</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Finished</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {syncRuns.map((run) => (
+                                                <tr key={run.id} className="hover:bg-slate-50">
+                                                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">
+                                                        {run.sync_job.replace('SyncTenant', '').replace('Job', '')}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3">
+                                                        <StatusBadge
+                                                            variant={run.status === 'completed' ? 'success' : run.status === 'failed' ? 'critical' : 'warning'}
+                                                            label={run.status}
+                                                            dot
+                                                        />
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-right text-slate-600">{run.records_processed}</td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                                                        {new Date(run.started_at).toLocaleString()}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                                                        {run.finished_at ? new Date(run.finished_at).toLocaleString() : '—'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {syncRuns.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={5} className="py-12 text-center text-sm text-slate-400">
+                                                        No sync runs found for this tenant.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {syncPagination.total > 0 && (
+                                    <PaginationControls
+                                        currentPage={syncPagination.current_page}
+                                        lastPage={syncPagination.last_page}
+                                        perPage={syncPagination.per_page}
+                                        total={syncPagination.total}
+                                        onPageChange={(p) => fetchSyncHistory(p, syncPagination.per_page)}
+                                        onPerPageChange={(pp) => fetchSyncHistory(1, pp)}
+                                    />
                                 )}
-                            </tbody>
-                        </table>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

@@ -77,6 +77,16 @@ class RetryingGraphClient implements GraphClient
         return $this->retry(fn () => $this->inner->fetchSharePointUsage($tenantId), 'fetchSharePointUsage', $tenantId);
     }
 
+    public function fetchCopilotUsage(string $tenantId): array
+    {
+        return $this->retry(fn () => $this->inner->fetchCopilotUsage($tenantId), 'fetchCopilotUsage', $tenantId);
+    }
+
+    public function fetchSharePointSites(string $tenantId): array
+    {
+        return $this->retry(fn () => $this->inner->fetchSharePointSites($tenantId), 'fetchSharePointSites', $tenantId);
+    }
+
     /** @return mixed */
     private function retry(callable $callback, string $method, string $tenantId): mixed
     {

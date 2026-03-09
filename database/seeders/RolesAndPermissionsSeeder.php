@@ -16,6 +16,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'integrations.view', 'integrations.manage', 'graph.sync.run',
             'reports.export', 'audit.view', 'findings.manage', 'alerts.manage',
             'identity.view', 'devices.view', 'licensing.view', 'service-health.view',
+            'copilot.view',
         ];
 
         $permissionIds = [];
@@ -35,12 +36,12 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $roles = [
             'platform-super-admin' => $permissions,
-            'security-admin' => ['audit.view', 'findings.manage', 'alerts.manage', 'tenants.view', 'identity.view', 'devices.view'],
+            'security-admin' => ['audit.view', 'findings.manage', 'alerts.manage', 'tenants.view', 'identity.view', 'devices.view', 'copilot.view'],
             'integration-admin' => ['integrations.view', 'integrations.manage', 'graph.sync.run', 'tenants.view'],
-            'engineer' => ['tenants.view', 'integrations.view', 'graph.sync.run', 'findings.manage', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view'],
-            'read-only-analyst' => ['tenants.view', 'integrations.view', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view'],
-            'msp-operations-manager' => ['tenants.view', 'integrations.view', 'reports.export', 'findings.manage', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view'],
-            'senior-engineer' => ['tenants.view', 'tenants.manage', 'integrations.view', 'integrations.manage', 'graph.sync.run', 'findings.manage', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view'],
+            'engineer' => ['tenants.view', 'integrations.view', 'graph.sync.run', 'findings.manage', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view', 'copilot.view'],
+            'read-only-analyst' => ['tenants.view', 'integrations.view', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view', 'copilot.view'],
+            'msp-operations-manager' => ['tenants.view', 'integrations.view', 'reports.export', 'findings.manage', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view', 'copilot.view'],
+            'senior-engineer' => ['tenants.view', 'tenants.manage', 'integrations.view', 'integrations.manage', 'graph.sync.run', 'findings.manage', 'identity.view', 'devices.view', 'licensing.view', 'service-health.view', 'copilot.view'],
             'service-desk' => ['tenants.view'],
             'account-manager' => ['tenants.view', 'reports.export'],
             'auditor' => ['tenants.view', 'audit.view', 'reports.export'],

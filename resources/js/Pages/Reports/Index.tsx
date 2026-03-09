@@ -1,6 +1,7 @@
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
+import { useTenantScope } from '../../hooks/useTenantScope';
 import {
     DocumentChartBarIcon,
     ArrowDownTrayIcon,
@@ -10,6 +11,8 @@ import {
     CreditCardIcon,
     SignalIcon,
     ChartBarIcon,
+    SparklesIcon,
+    ServerStackIcon,
 } from '@heroicons/react/24/outline';
 
 const reports = [
@@ -69,6 +72,20 @@ const reports = [
         icon: SignalIcon,
         color: 'blue' as const,
     },
+    {
+        title: 'Copilot Usage',
+        description: 'Per-user Copilot activity across Teams, Word, Excel, PowerPoint, and Outlook.',
+        endpoint: '/api/v1/reports/copilot-usage',
+        icon: SparklesIcon,
+        color: 'purple' as const,
+    },
+    {
+        title: 'SharePoint Sites',
+        description: 'SharePoint site inventory with sharing, storage, sensitivity labels, and guest access.',
+        endpoint: '/api/v1/reports/sharepoint-sites',
+        icon: ServerStackIcon,
+        color: 'cyan' as const,
+    },
 ];
 
 const iconBg: Record<string, string> = {
@@ -81,15 +98,17 @@ const iconBg: Record<string, string> = {
 };
 
 export default function ReportsIndex() {
+    const { selectedTenantId, selectedTenant, buildUrl, isFiltered } = useTenantScope();
+
     const handleExport = (endpoint: string) => {
-        window.open(endpoint, '_blank');
+        window.open(buildUrl(endpoint), '_blank');
     };
 
     return (
         <AppLayout title="Reports">
             <PageHeader
                 title="Reports"
-                subtitle="Export data reports as CSV"
+                subtitle={isFiltered ? `Export data reports for ${selectedTenant?.customer_name}` : 'Export data reports as CSV'}
                 breadcrumbs={[{ label: 'Operations' }, { label: 'Reports' }]}
             />
 
