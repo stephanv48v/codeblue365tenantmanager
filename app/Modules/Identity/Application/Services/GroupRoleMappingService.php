@@ -13,7 +13,23 @@ class GroupRoleMappingService
      */
     public function syncUserRoles(int $userId, array $groupIds): void
     {
-        $map = config('codeblue365.entra_group_role_map', []);
+        $setting = DB::table('settings')->where('key', 'rbac.entra_group_role_map')->value('value');
+        $mappingsArray = $setting ? json_decode($setting, true) : [];
+
+        // Build a group_id => role_slug lookup from the array-of-objects format
+        $map = [];
+        if (is_array($mappingsArray)) {
+            foreach ($mappingsArray as $entry) {
+                if (isset($entry['entra_group_id'], $entry['role_slug'])) {
+                    $map[$entry['entra_group_id']] = $entry['role_slug'];
+                }
+            }
+        }
+
+        // Fall back to config if no settings stored
+        if (empty($map)) {
+            $map = config('codeblue365.entra_group_role_map', []);
+        }
 
         foreach ($groupIds as $groupId) {
             $roleSlug = $map[$groupId] ?? null;

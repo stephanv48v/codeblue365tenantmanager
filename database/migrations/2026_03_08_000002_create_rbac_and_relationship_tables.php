@@ -47,8 +47,8 @@ return new class extends Migration {
             $table->string('status')->default('unknown')->index();
             $table->timestamp('starts_at')->nullable();
             $table->timestamp('expires_at')->nullable()->index();
-            $table->jsonb('role_assignments')->nullable();
-            $table->jsonb('metadata')->nullable();
+            $table->json('role_assignments')->nullable();
+            $table->json('metadata')->nullable();
             $table->timestamps();
         });
 
@@ -58,7 +58,7 @@ return new class extends Migration {
             $table->foreignId('integration_id')->constrained('integrations')->cascadeOnDelete();
             $table->string('status')->default('not_configured')->index();
             $table->timestamp('last_validated_at')->nullable();
-            $table->jsonb('validation_payload')->nullable();
+            $table->json('validation_payload')->nullable();
             $table->timestamps();
             $table->unique(['managed_tenant_id', 'integration_id']);
         });

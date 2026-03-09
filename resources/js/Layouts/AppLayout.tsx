@@ -1,45 +1,53 @@
-import React from 'react';
-
-type NavItem = {
-  label: string;
-  href: string;
-  requiredRole?: string;
-};
+import { useState } from 'react';
+import { usePage } from '@inertiajs/react';
+import { XMarkIcon } from '@heroicons/react/24/outline';
+import type { SharedPageProps } from '../types';
+import Sidebar from './Sidebar';
+import TopHeader from './TopHeader';
 
 type Props = {
-  title: string;
-  children: React.ReactNode;
-  userRoles?: string[];
+    title: string;
+    children: React.ReactNode;
 };
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Tenants', href: '/tenants', requiredRole: 'engineer' },
-  { label: 'Integrations', href: '/integrations', requiredRole: 'integration-admin' },
-  { label: 'Playbooks', href: '/playbooks', requiredRole: 'integration-admin' },
-  { label: 'Findings', href: '/findings', requiredRole: 'security-admin' },
-];
+export default function AppLayout({ title, children }: Props) {
+    const { auth } = usePage<SharedPageProps>().props;
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
-export default function AppLayout({ title, children, userRoles = ['engineer'] }: Props) {
-  const allowed = navItems.filter((item) => !item.requiredRole || userRoles.includes(item.requiredRole));
+    const user = auth.user ?? { id: 0, name: 'Guest', email: '', roles: [] };
 
-  return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="border-b bg-white px-6 py-4">
-        <h1 className="text-xl font-semibold">CodeBlue 365 Tenant Manager · {title}</h1>
-        <nav className="mt-3 flex flex-wrap gap-2">
-          {allowed.map((item) => (
-            <a
-              key={item.href}
-              className="rounded-md bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-              href={item.href}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-      </header>
-      <main className="p-6">{children}</main>
-    </div>
-  );
+    return (
+        <div className="flex h-screen overflow-hidden bg-slate-100">
+            {/* Mobile sidebar overlay */}
+            {sidebarOpen && (
+                <div className="fixed inset-0 z-50 lg:hidden">
+                    <div
+                        className="fixed inset-0 bg-slate-900/80"
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                    <div className="fixed inset-0 flex">
+                        <div className="relative mr-16 flex w-full max-w-64">
+                            <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
+                                <button onClick={() => setSidebarOpen(false)} className="-m-2.5 p-2.5">
+                                    <XMarkIcon className="h-6 w-6 text-white" />
+                                </button>
+                            </div>
+                            <Sidebar user={user} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Desktop sidebar */}
+            <aside className="hidden w-64 flex-shrink-0 lg:flex">
+                <Sidebar user={user} />
+            </aside>
+
+            {/* Main content area */}
+            <div className="flex flex-1 flex-col overflow-hidden">
+                <TopHeader title={title} user={user} onMenuToggle={() => setSidebarOpen(true)} />
+                <main className="flex-1 overflow-y-auto p-6">{children}</main>
+            </div>
+        </div>
+    );
 }

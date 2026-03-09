@@ -27,6 +27,25 @@ class SyncTenantUsersJob implements ShouldQueue
     {
         $users = $graphClient->fetchUsers($this->tenantId);
 
+        foreach ($users as $user) {
+            DB::table('users_normalized')->updateOrInsert(
+                [
+                    'tenant_id' => $this->tenantId,
+                    'entra_user_id' => $user['id'] ?? $user['entra_user_id'] ?? '',
+                ],
+                [
+                    'display_name' => $user['displayName'] ?? $user['display_name'] ?? null,
+                    'user_principal_name' => $user['userPrincipalName'] ?? $user['user_principal_name'] ?? null,
+                    'mail' => $user['mail'] ?? null,
+                    'account_enabled' => $user['accountEnabled'] ?? $user['account_enabled'] ?? true,
+                    'mfa_registered' => $user['mfa_registered'] ?? false,
+                    'last_sign_in_at' => $user['lastSignInAt'] ?? $user['last_sign_in_at'] ?? null,
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
+
         DB::table('sync_runs')->insert([
             'tenant_id' => $this->tenantId,
             'sync_job' => 'SyncTenantUsersJob',

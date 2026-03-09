@@ -1,0 +1,23 @@
+{
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "laravel-dev",
+            "runtimeExecutable": "C:\\Users\\steph\\.config\\herd\\bin\\php84\\php.exe",
+            "runtimeArgs": ["-S", "127.0.0.1:8088", "-t", "public"],
+            "port": 8088
+        },
+        {
+            "name": "vite-dev",
+            "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+            "runtimeArgs": ["node_modules/vite/bin/vite.js"],
+            "port": 5173
+        },
+        {
+            "name": "horizon",
+            "runtimeExecutable": "C:\\Users\\steph\\.config\\herd\\bin\\php84\\php.exe",
+            "runtimeArgs": ["artisan", "horizon"],
+            "port": 9090
+        }
+    ]
+}

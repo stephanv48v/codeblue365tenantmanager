@@ -81,7 +81,7 @@ return new class extends Migration {
             $table->string('category')->index();
             $table->string('severity')->index();
             $table->text('description');
-            $table->jsonb('evidence')->nullable();
+            $table->json('evidence')->nullable();
             $table->text('impact')->nullable();
             $table->text('recommended_remediation')->nullable();
             $table->timestamp('first_detected_at')->nullable();
@@ -93,7 +93,7 @@ return new class extends Migration {
             $table->id();
             $table->string('event_type')->index();
             $table->string('actor_identifier')->nullable()->index();
-            $table->jsonb('payload')->nullable();
+            $table->json('payload')->nullable();
             $table->timestamp('created_at');
         });
     }

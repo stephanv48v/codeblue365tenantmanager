@@ -69,14 +69,14 @@ export default function PlaybookShow({ slug }: { slug: string }) {
 
   if (!playbook) {
     return (
-      <AppLayout title="Playbook" userRoles={['integration-admin']}>
+      <AppLayout title="Playbook">
         <div className="rounded-xl border bg-white p-4">Loading playbook...</div>
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout title={`Playbook · ${playbook.title}`} userRoles={['integration-admin']}>
+    <AppLayout title={`Playbook · ${playbook.title}`}>
       <div className="space-y-4 rounded-xl border bg-white p-4">
         <div>
           <h2 className="text-lg font-semibold">{playbook.title}</h2>

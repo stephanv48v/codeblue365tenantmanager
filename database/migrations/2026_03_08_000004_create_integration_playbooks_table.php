@@ -16,12 +16,12 @@ return new class extends Migration {
             $table->string('integration_slug')->index();
             $table->string('version')->default('1.0.0');
             $table->string('owner')->nullable();
-            $table->jsonb('prerequisites')->nullable();
-            $table->jsonb('steps')->nullable();
-            $table->jsonb('permissions')->nullable();
-            $table->jsonb('gdap_requirements')->nullable();
-            $table->jsonb('consent_requirements')->nullable();
-            $table->jsonb('troubleshooting')->nullable();
+            $table->json('prerequisites')->nullable();
+            $table->json('steps')->nullable();
+            $table->json('permissions')->nullable();
+            $table->json('gdap_requirements')->nullable();
+            $table->json('consent_requirements')->nullable();
+            $table->json('troubleshooting')->nullable();
             $table->boolean('is_active')->default(true)->index();
             $table->timestamps();
         });

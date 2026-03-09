@@ -21,6 +21,10 @@ class IntegrationsSeeder extends Seeder
             ['slug' => 'service-health', 'name' => 'Service Health / Message Center'],
             ['slug' => 'license-data', 'name' => 'License Data'],
             ['slug' => 'device-inventory', 'name' => 'Device Inventory'],
+            ['slug' => 'conditional-access', 'name' => 'Conditional Access Policies'],
+            ['slug' => 'risky-users', 'name' => 'Identity Protection / Risky Users'],
+            ['slug' => 'mailbox-usage', 'name' => 'Exchange Online Usage'],
+            ['slug' => 'sharepoint-usage', 'name' => 'SharePoint & OneDrive Usage'],
         ];
 
         foreach ($integrations as $integration) {
