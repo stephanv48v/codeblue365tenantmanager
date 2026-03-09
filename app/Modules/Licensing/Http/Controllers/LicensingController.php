@@ -13,17 +13,17 @@ class LicensingController extends Controller
 {
     public function overview(): JsonResponse
     {
-        $totalLicenses = (int) DB::table('licenses')->sum('total_units');
-        $assigned = (int) DB::table('licenses')->sum('assigned_units');
+        $totalLicenses = (int) DB::table('licenses')->sum('total');
+        $assigned = (int) DB::table('licenses')->sum('assigned');
         $available = $totalLicenses - $assigned;
         $wastePercent = $totalLicenses > 0 ? round(($available / $totalLicenses) * 100, 1) : 0;
 
         $topSkus = DB::table('licenses')
             ->select([
                 'sku_name',
-                DB::raw('SUM(total_units) as total'),
-                DB::raw('SUM(assigned_units) as assigned'),
-                DB::raw('SUM(total_units) - SUM(assigned_units) as available'),
+                DB::raw('SUM(total) as total'),
+                DB::raw('SUM(assigned) as assigned'),
+                DB::raw('SUM(total) - SUM(assigned) as available'),
             ])
             ->groupBy('sku_name')
             ->orderByDesc('total')
@@ -35,9 +35,9 @@ class LicensingController extends Controller
             ->select([
                 'managed_tenants.customer_name',
                 'licenses.tenant_id',
-                DB::raw('SUM(licenses.total_units) as total'),
-                DB::raw('SUM(licenses.assigned_units) as assigned'),
-                DB::raw('SUM(licenses.total_units) - SUM(licenses.assigned_units) as available'),
+                DB::raw('SUM(licenses.total) as total'),
+                DB::raw('SUM(licenses.assigned) as assigned'),
+                DB::raw('SUM(licenses.total) - SUM(licenses.assigned) as available'),
             ])
             ->groupBy('managed_tenants.customer_name', 'licenses.tenant_id')
             ->orderBy('managed_tenants.customer_name')

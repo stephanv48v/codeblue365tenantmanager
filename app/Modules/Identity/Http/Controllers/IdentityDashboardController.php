@@ -136,7 +136,7 @@ class IdentityDashboardController extends Controller
             $query->where('risky_users.tenant_id', (string) $request->string('tenant_id'));
         }
 
-        $riskyUsers = $query->orderByRaw("FIELD(risk_level, 'high', 'medium', 'low', 'none')")
+        $riskyUsers = $query->orderByRaw("CASE risk_level WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 WHEN 'none' THEN 4 ELSE 5 END")
             ->get();
 
         $totalRisky = $riskyUsers->count();
