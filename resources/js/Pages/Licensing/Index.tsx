@@ -9,10 +9,49 @@ import StatCard from '../../Components/StatCard';
 import ChartCard from '../../Components/ChartCard';
 import PageHeader from '../../Components/PageHeader';
 import SkeletonLoader from '../../Components/SkeletonLoader';
+import ExportButton from '../../Components/ExportButton';
+import { usePdfReport } from '../../hooks/usePdfReport';
 import { useLicensingData } from './hooks/useLicensingData';
 
 export default function LicensingIndex() {
     const { overview, loading } = useLicensingData();
+    const { generating, generateReport } = usePdfReport();
+
+    const handlePdfExport = async () => {
+        if (!overview) return;
+        const d = overview;
+        await generateReport({
+            title: 'Licensing Overview Report',
+            subtitle: 'License utilization and waste tracking across all tenants',
+            orientation: 'landscape',
+            sections: [
+                {
+                    type: 'stats',
+                    data: [
+                        { label: 'Total Licenses', value: d.total_licenses.toLocaleString() },
+                        { label: 'Assigned', value: d.assigned.toLocaleString() },
+                        { label: 'Available', value: d.available.toLocaleString() },
+                        { label: 'Waste', value: `${d.waste_percent}%` },
+                        { label: 'Est. Monthly Waste', value: `$${Math.round(d.available * 12)}` },
+                    ],
+                },
+                { type: 'chart', elementId: 'licensing-sku-chart', title: 'Utilization by SKU' },
+                { type: 'chart', elementId: 'licensing-tenant-chart', title: 'Utilization by Tenant' },
+                {
+                    type: 'table',
+                    title: 'Per-Tenant License Details',
+                    headers: ['Tenant', 'Total', 'Assigned', 'Available', 'Utilization'],
+                    rows: d.per_tenant_utilization.map((t) => [
+                        t.customer_name,
+                        t.total,
+                        t.assigned,
+                        t.available,
+                        `${t.total > 0 ? Math.round((t.assigned / t.total) * 100) : 0}%`,
+                    ]),
+                },
+            ],
+        });
+    };
 
     if (loading) {
         return (
@@ -45,6 +84,7 @@ export default function LicensingIndex() {
                 title="Licensing"
                 subtitle="License utilization and waste tracking across all tenants"
                 breadcrumbs={[{ label: 'Licensing' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/license-utilization" onExportPdf={handlePdfExport} pdfGenerating={generating} />}
             />
 
             <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
@@ -65,8 +105,64 @@ export default function LicensingIndex() {
                 />
             </div>
 
+            {/* Top Wasted SKUs */}
+            {(() => {
+                const wastedSkus = [...d.top_skus]
+                    .map((s) => ({
+                        name: s.sku_name,
+                        waste: s.available,
+                        wastePct: s.total > 0 ? Math.round((s.available / s.total) * 100) : 0,
+                        total: s.total,
+                    }))
+                    .sort((a, b) => b.waste - a.waste)
+                    .slice(0, 3);
+
+                return wastedSkus.length > 0 && wastedSkus[0].waste > 0 ? (
+                    <div className="mb-6">
+                        <h3 className="mb-3 text-sm font-semibold text-slate-800">Top Wasted SKUs</h3>
+                        <div className="grid gap-4 md:grid-cols-3">
+                            {wastedSkus.map((sku) => (
+                                <div
+                                    key={sku.name}
+                                    className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md"
+                                >
+                                    <p className="truncate text-sm font-medium text-slate-700" title={sku.name}>
+                                        {sku.name}
+                                    </p>
+                                    <div className="mt-3 flex items-end justify-between">
+                                        <div>
+                                            <p className={`text-2xl font-bold ${sku.wastePct > 30 ? 'text-red-600' : sku.wastePct > 15 ? 'text-amber-600' : 'text-slate-800'}`}>
+                                                {sku.waste.toLocaleString()}
+                                            </p>
+                                            <p className="text-xs text-slate-400">unused licenses</p>
+                                        </div>
+                                        <span
+                                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                                sku.wastePct > 30
+                                                    ? 'bg-red-50 text-red-700'
+                                                    : sku.wastePct > 15
+                                                      ? 'bg-amber-50 text-amber-700'
+                                                      : 'bg-slate-100 text-slate-600'
+                                            }`}
+                                        >
+                                            {sku.wastePct}% waste
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 h-1.5 w-full rounded-full bg-slate-100">
+                                        <div
+                                            className={`h-1.5 rounded-full ${sku.wastePct > 30 ? 'bg-red-500' : sku.wastePct > 15 ? 'bg-amber-500' : 'bg-slate-400'}`}
+                                            style={{ width: `${Math.min(sku.wastePct, 100)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : null;
+            })()}
+
             <div className="mb-6 grid gap-6 lg:grid-cols-2">
-                <ChartCard title="Utilization by SKU" subtitle="Top license types">
+                <ChartCard title="Utilization by SKU" subtitle="Top license types" id="licensing-sku-chart">
                     <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={skuData} layout="vertical">
                             <XAxis type="number" />
@@ -79,7 +175,7 @@ export default function LicensingIndex() {
                     </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Utilization by Tenant" subtitle="Per-tenant license breakdown">
+                <ChartCard title="Utilization by Tenant" subtitle="Per-tenant license breakdown" id="licensing-tenant-chart">
                     <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={tenantData} layout="vertical">
                             <XAxis type="number" />

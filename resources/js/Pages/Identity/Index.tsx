@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import {
     UsersIcon,
@@ -5,12 +6,17 @@ import {
     ExclamationTriangleIcon,
     KeyIcon,
     ClockIcon,
+    FingerPrintIcon,
+    UserPlusIcon,
+    ArrowRightOnRectangleIcon,
 } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import StatCard from '../../Components/StatCard';
 import ChartCard from '../../Components/ChartCard';
 import PageHeader from '../../Components/PageHeader';
 import SkeletonLoader from '../../Components/SkeletonLoader';
+import ExportButton from '../../Components/ExportButton';
+import { usePdfReport } from '../../hooks/usePdfReport';
 import { useIdentityData } from './hooks/useIdentityData';
 
 const RISK_COLORS: Record<string, string> = {
@@ -22,6 +28,31 @@ const RISK_COLORS: Record<string, string> = {
 
 export default function IdentityIndex() {
     const { overview, loading } = useIdentityData();
+    const { generating, generateReport } = usePdfReport();
+
+    const handlePdfExport = async () => {
+        if (!overview) return;
+        const d = overview;
+        await generateReport({
+            title: 'Identity Overview Report',
+            subtitle: 'User identity health across all tenants',
+            orientation: 'landscape',
+            sections: [
+                {
+                    type: 'stats',
+                    data: [
+                        { label: 'Total Users', value: d.total_users },
+                        { label: 'MFA Coverage', value: `${d.mfa_coverage_percent}%` },
+                        { label: 'Stale Users', value: d.stale_users },
+                        { label: 'Risky Users', value: d.risky_users_count },
+                        { label: 'CA Policies', value: d.ca_policies_count },
+                    ],
+                },
+                { type: 'chart', elementId: 'identity-mfa-chart', title: 'MFA Coverage by Tenant' },
+                { type: 'chart', elementId: 'identity-risky-chart', title: 'Risky Users by Level' },
+            ],
+        });
+    };
 
     if (loading) {
         return (
@@ -54,6 +85,7 @@ export default function IdentityIndex() {
                 title="Identity"
                 subtitle="User identity health across all tenants"
                 breadcrumbs={[{ label: 'Identity', href: '/identity' }, { label: 'Overview' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/identity" onExportPdf={handlePdfExport} pdfGenerating={generating} />}
             />
 
             {/* Stat Cards */}
@@ -90,7 +122,7 @@ export default function IdentityIndex() {
 
             {/* Charts */}
             <div className="mb-6 grid gap-6 lg:grid-cols-12">
-                <ChartCard title="MFA Coverage by Tenant" subtitle="Users with MFA vs without" className="lg:col-span-8">
+                <ChartCard title="MFA Coverage by Tenant" subtitle="Users with MFA vs without" className="lg:col-span-8" id="identity-mfa-chart">
                     <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={mfaByTenant} layout="vertical">
                             <XAxis type="number" />
@@ -102,7 +134,7 @@ export default function IdentityIndex() {
                     </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Risky Users by Level" className="lg:col-span-4">
+                <ChartCard title="Risky Users by Level" className="lg:col-span-4" id="identity-risky-chart">
                     {riskyByLevel.length > 0 ? (
                         <ResponsiveContainer width="100%" height={280}>
                             <PieChart>
@@ -124,8 +156,8 @@ export default function IdentityIndex() {
             </div>
 
             {/* Quick Links */}
-            <div className="grid gap-4 md:grid-cols-3">
-                <a href="/identity/users" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+                <Link href="/identity/users" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                             <UsersIcon className="h-5 w-5" />
@@ -135,8 +167,8 @@ export default function IdentityIndex() {
                             <p className="text-xs text-slate-400">Browse and filter user directory</p>
                         </div>
                     </div>
-                </a>
-                <a href="/identity/risky-users" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
+                </Link>
+                <Link href="/identity/risky-users" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
                             <ExclamationTriangleIcon className="h-5 w-5" />
@@ -146,8 +178,8 @@ export default function IdentityIndex() {
                             <p className="text-xs text-slate-400">Identity Protection alerts</p>
                         </div>
                     </div>
-                </a>
-                <a href="/identity/conditional-access" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
+                </Link>
+                <Link href="/identity/conditional-access" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
                             <KeyIcon className="h-5 w-5" />
@@ -157,7 +189,51 @@ export default function IdentityIndex() {
                             <p className="text-xs text-slate-400">CA policy inventory</p>
                         </div>
                     </div>
-                </a>
+                </Link>
+                <Link href="/identity/auth-methods" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                            <FingerPrintIcon className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">Auth Methods</p>
+                            <p className="text-xs text-slate-400">MFA adoption &amp; SSPR readiness</p>
+                        </div>
+                    </div>
+                </Link>
+                <Link href="/identity/admin-accounts" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                            <KeyIcon className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">Admin Accounts</p>
+                            <p className="text-xs text-slate-400">Privileged role management</p>
+                        </div>
+                    </div>
+                </Link>
+                <Link href="/identity/guest-users" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600">
+                            <UserPlusIcon className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">Guest Users</p>
+                            <p className="text-xs text-slate-400">External user lifecycle</p>
+                        </div>
+                    </div>
+                </Link>
+                <Link href="/identity/sign-in-activity" className="rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                            <ArrowRightOnRectangleIcon className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">Sign-In Activity</p>
+                            <p className="text-xs text-slate-400">Authentication trends</p>
+                        </div>
+                    </div>
+                </Link>
             </div>
         </AppLayout>
     );

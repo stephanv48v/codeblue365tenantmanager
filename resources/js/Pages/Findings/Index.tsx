@@ -7,6 +7,9 @@ import FilterBar from '../../Components/FilterBar';
 import PaginationControls from '../../Components/PaginationControls';
 import BulkActionBar from '../../Components/BulkActionBar';
 import DetailPanel from '../../Components/DetailPanel';
+import ExportButton from '../../Components/ExportButton';
+import { usePdfReport } from '../../hooks/usePdfReport';
+import { useTenantScope } from '../../hooks/useTenantScope';
 import { ShieldExclamationIcon } from '@heroicons/react/24/outline';
 import useFindingsData from './hooks/useFindingsData';
 
@@ -36,6 +39,42 @@ export default function FindingsIndex() {
         fetchFindings, bulkUpdate,
         toggleSelection, toggleAll,
     } = useFindingsData();
+    const { generating, generateReport } = usePdfReport();
+    const { selectedTenant, isFiltered } = useTenantScope();
+
+    const handlePdfExport = async () => {
+        await generateReport({
+            title: 'Findings Report',
+            subtitle: isFiltered && selectedTenant ? selectedTenant.customer_name : 'All Tenants',
+            orientation: 'landscape',
+            sections: [
+                {
+                    type: 'stats',
+                    data: [
+                        { label: 'Total', value: summary.total },
+                        { label: 'Open', value: summary.open },
+                        { label: 'Critical', value: summary.critical },
+                        { label: 'High', value: summary.high },
+                        { label: 'Medium', value: summary.medium },
+                        { label: 'Low', value: summary.low },
+                    ],
+                },
+                {
+                    type: 'table',
+                    title: 'Findings',
+                    headers: ['Severity', 'Category', 'Description', 'Tenant', 'Status', 'Detected'],
+                    rows: findings.map((f) => [
+                        f.severity,
+                        f.category.replace(/_/g, ' '),
+                        f.description,
+                        f.customer_name ?? f.tenant_id,
+                        f.status ?? 'open',
+                        f.last_detected_at ? new Date(f.last_detected_at).toLocaleDateString() : '-',
+                    ]),
+                },
+            ],
+        });
+    };
 
     const handleFilterChange = (key: string, value: string) => {
         const newFilters = { ...filters, [key]: value };
@@ -61,6 +100,7 @@ export default function FindingsIndex() {
                 title="Findings"
                 subtitle="Security and compliance findings across all tenants"
                 breadcrumbs={[{ label: 'Security & Compliance' }, { label: 'Findings' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/findings" onExportPdf={handlePdfExport} pdfGenerating={generating} />}
             />
 
             {/* Stat Cards */}

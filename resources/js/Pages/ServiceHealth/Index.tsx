@@ -14,6 +14,7 @@ import SkeletonLoader from '../../Components/SkeletonLoader';
 import SectionHeader from '../../Components/SectionHeader';
 import FilterBar from '../../Components/FilterBar';
 import PaginationControls from '../../Components/PaginationControls';
+import ExportButton from '../../Components/ExportButton';
 import { useServiceHealthData } from './hooks/useServiceHealthData';
 
 const classificationVariant = (classification: string) => {
@@ -76,6 +77,7 @@ export default function ServiceHealthIndex() {
                 title="Service Health"
                 subtitle="Microsoft 365 service status across managed tenants"
                 breadcrumbs={[{ label: 'Service Health' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/service-health" />}
             />
 
             <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-4">

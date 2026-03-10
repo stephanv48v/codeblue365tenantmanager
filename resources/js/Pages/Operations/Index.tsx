@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
 import ChartCard from '../../Components/ChartCard';
 import StatusBadge from '../../Components/StatusBadge';
 import SkeletonLoader from '../../Components/SkeletonLoader';
-import { useTenantScope } from '../../hooks/useTenantScope';
+import ExportButton from '../../Components/ExportButton';
+import { useOperationsData } from './hooks/useOperationsData';
 import {
     CogIcon,
     CheckCircleIcon,
@@ -18,54 +18,15 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 
-type SyncRun = {
-    id: number;
-    tenant_id: string;
-    sync_job: string;
-    status: string;
-    records_processed: number;
-    started_at: string;
-    finished_at: string | null;
-};
-
-type SyncSummary = { completed: number; failed: number; pending: number; total: number };
-type StaleTenant = { tenant_id: string; customer_name: string; last_sync_at: string | null };
-type TrendPoint = { date: string; success: number; failed: number; partial: number; total: number };
-
 const PIE_COLORS = ['#10b981', '#ef4444', '#f59e0b'];
 
 export default function OperationsIndex() {
-    const { selectedTenantId, buildUrl } = useTenantScope();
-    const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
-    const [summary, setSummary] = useState<SyncSummary>({ completed: 0, failed: 0, pending: 0, total: 0 });
-    const [staleTenants, setStaleTenants] = useState<StaleTenant[]>([]);
-    const [openAlerts, setOpenAlerts] = useState(0);
-    const [trends, setTrends] = useState<TrendPoint[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data, loading } = useOperationsData();
 
-    useEffect(() => {
-        setLoading(true);
-        Promise.all([
-            fetch(buildUrl('/api/v1/dashboard/operations')).then((r) => r.json()),
-            fetch(buildUrl('/api/v1/sync/trends')).then((r) => r.json()),
-        ]).then(([opsRes, trendsRes]) => {
-            if (opsRes.success) {
-                setSyncRuns(opsRes.data.recent_sync_runs ?? []);
-                setSummary(opsRes.data.sync_summary ?? { completed: 0, failed: 0, pending: 0, total: 0 });
-                setStaleTenants(opsRes.data.stale_tenants ?? []);
-                setOpenAlerts(opsRes.data.open_alerts ?? 0);
-            }
-            if (trendsRes.success) {
-                setTrends(trendsRes.data.items ?? []);
-            }
-            setLoading(false);
-        });
-    }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    if (loading) {
+    if (loading || !data) {
         return (
             <AppLayout title="Operations">
-                <PageHeader title="Operations" subtitle="Sync pipeline monitoring" />
+                <PageHeader title="Operations" subtitle="Sync pipeline monitoring" breadcrumbs={[{ label: 'Operations' }]} actions={<ExportButton csvEndpoint="/api/v1/reports/sync-runs" />} />
                 <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-4">
                     <SkeletonLoader variant="stat-card" count={4} className="contents" />
                 </div>
@@ -73,6 +34,7 @@ export default function OperationsIndex() {
         );
     }
 
+    const { syncRuns, summary, staleTenants, openAlerts, trends } = data;
     const successRate = summary.total > 0 ? Math.round((summary.completed / summary.total) * 100) : 0;
     const pieData = [
         { name: 'Completed', value: summary.completed ?? 0, fill: PIE_COLORS[0] },
@@ -93,6 +55,7 @@ export default function OperationsIndex() {
                 title="Operations"
                 subtitle="Sync pipeline monitoring and health"
                 breadcrumbs={[{ label: 'Operations' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/sync-runs" />}
             />
 
             <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-4">
@@ -162,7 +125,7 @@ export default function OperationsIndex() {
             </div>
 
             {/* Recent Sync Runs Table */}
-            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="mb-6 rounded-xl border border-slate-200 bg-white overflow-hidden">
                 <div className="border-b border-slate-200 px-6 py-4">
                     <h3 className="text-sm font-semibold text-slate-800">Recent Sync Runs</h3>
                 </div>
@@ -202,6 +165,64 @@ export default function OperationsIndex() {
                     </table>
                 </div>
             </div>
+
+            {/* Tenant Sync Health */}
+            {staleTenants.length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                    <div className="border-b border-slate-200 px-6 py-4">
+                        <h3 className="text-sm font-semibold text-slate-800">
+                            Tenant Sync Health
+                            <span className="ml-2 font-normal text-slate-400">({staleTenants.length} tenant{staleTenants.length !== 1 ? 's' : ''} requiring attention)</span>
+                        </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="border-b border-slate-200 bg-slate-50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Tenant Name</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Last Sync</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {staleTenants.map((tenant) => {
+                                    const lastSync = tenant.last_sync_at ? new Date(tenant.last_sync_at) : null;
+                                    const now = new Date();
+                                    const daysSinceSync = lastSync
+                                        ? Math.floor((now.getTime() - lastSync.getTime()) / (1000 * 60 * 60 * 24))
+                                        : Infinity;
+                                    const statusColor =
+                                        daysSinceSync >= 7 ? 'bg-red-500'
+                                        : daysSinceSync >= 3 ? 'bg-amber-500'
+                                        : 'bg-emerald-500';
+                                    const statusLabel =
+                                        !lastSync ? 'Never synced'
+                                        : daysSinceSync >= 7 ? `${daysSinceSync}d stale`
+                                        : daysSinceSync >= 3 ? `${daysSinceSync}d ago`
+                                        : 'Recent';
+
+                                    return (
+                                        <tr key={tenant.tenant_id} className="hover:bg-slate-50">
+                                            <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">
+                                                {tenant.customer_name}
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
+                                                {lastSync ? lastSync.toLocaleString() : 'Never'}
+                                            </td>
+                                            <td className="whitespace-nowrap px-4 py-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`inline-block h-2.5 w-2.5 rounded-full ${statusColor}`} />
+                                                    <span className="text-xs text-slate-600">{statusLabel}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

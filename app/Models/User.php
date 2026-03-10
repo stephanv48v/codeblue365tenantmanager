@@ -22,6 +22,20 @@ class User extends Authenticatable
         'last_login_at',
     ];
 
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return [
+            'last_login_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'user_roles');

@@ -13,16 +13,14 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // DevAutoLogin must run AFTER StartSession (core middleware) so Auth::check() works,
+        // but BEFORE HandleInertiaRequests so the correct user is shared to the frontend.
         $middleware->web(append: [
+            \App\Http\Middleware\DevAutoLogin::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
-
-        // DevAutoLogin checks APP_ENV internally and no-ops in non-local environments
-        $middleware->web(prepend: [
-            \App\Http\Middleware\DevAutoLogin::class,
-        ]);
-        $middleware->api(prepend: [
+        $middleware->api(append: [
             \App\Http\Middleware\DevAutoLogin::class,
         ]);
 
@@ -33,7 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->is('api/*') || $request->expectsJson()) {
                 abort(401, 'Authentication required.');
             }
-            return '/';
+            return '/login';
         });
     })
     ->withExceptions(function (Exceptions $exceptions) {

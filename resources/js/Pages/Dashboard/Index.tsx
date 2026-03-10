@@ -14,6 +14,7 @@ import {
     GlobeAltIcon,
     ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline';
+import PageHeader from '../../Components/PageHeader';
 import { useDashboardData } from './hooks/useDashboardData';
 import type { ScoreEntry } from './hooks/useDashboardData';
 import { useTenantScope } from '../../hooks/useTenantScope';
@@ -80,6 +81,7 @@ function TenantDashboard({
 
     return (
         <AppLayout title={`${selectedTenant.customer_name} — Dashboard`}>
+            <PageHeader title={`${selectedTenant.customer_name} — Dashboard`} subtitle="Tenant overview" breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: selectedTenant.customer_name }]} />
             {/* Tenant Banner */}
             <div className="mb-6 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -274,6 +276,7 @@ export default function DashboardIndex() {
     if (loading) {
         return (
             <AppLayout title="Executive Dashboard">
+                <PageHeader title="Executive Dashboard" subtitle="Overview of managed tenants" breadcrumbs={[{ label: 'Dashboard' }]} />
                 <div className="mb-6 grid gap-4 md:grid-cols-3 lg:grid-cols-5">
                     {[...Array(5)].map((_, i) => (
                         <div key={i} className="h-28 animate-pulse rounded-xl border bg-slate-100" />
@@ -309,6 +312,7 @@ export default function DashboardIndex() {
     /* ---- All-Tenants View (unchanged) ---- */
     return (
         <AppLayout title="Executive Dashboard">
+            <PageHeader title="Executive Dashboard" subtitle="Overview across all managed tenants" breadcrumbs={[{ label: 'Dashboard' }]} />
             {/* ROW 1: Stat Cards */}
             <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
                 <StatCard

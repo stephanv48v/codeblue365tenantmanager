@@ -5,6 +5,7 @@ import StatCard from '../../Components/StatCard';
 import StatusBadge from '../../Components/StatusBadge';
 import SkeletonLoader from '../../Components/SkeletonLoader';
 import FilterBar from '../../Components/FilterBar';
+import ExportButton from '../../Components/ExportButton';
 import { useCopilotAgents } from './hooks/useCopilotAgents';
 import { useTenantScope } from '../../hooks/useTenantScope';
 import {
@@ -73,6 +74,7 @@ export default function CopilotAgents() {
                     title="Copilot Agents"
                     subtitle="Agent inventory and management"
                     breadcrumbs={[{ label: 'Copilot', href: '/copilot' }, { label: 'Agents' }]}
+                    actions={<ExportButton csvEndpoint="/api/v1/reports/copilot-agents" />}
                 />
                 <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-4">
                     <SkeletonLoader variant="stat-card" count={4} className="contents" />
@@ -89,6 +91,7 @@ export default function CopilotAgents() {
                 title="Copilot Agents"
                 subtitle={isFiltered ? 'Agent inventory for selected tenant' : 'Agent inventory across all tenants'}
                 breadcrumbs={[{ label: 'Copilot', href: '/copilot' }, { label: 'Agents' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/copilot-agents" />}
             />
 
             {/* ── ROW 1: Stat Cards ────────────────────────────────────────── */}

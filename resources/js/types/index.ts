@@ -7,10 +7,19 @@ export type AuthUser = {
     roles: string[];
 };
 
+export type BrandingConfig = {
+    company_name: string;
+    tagline: string;
+    primary_color: string;
+    logo_url: string | null;
+    report_subtitle: string;
+};
+
 export type SharedPageProps = {
     auth: {
         user: AuthUser | null;
     };
+    branding: BrandingConfig;
 };
 
 export type NavItem = {

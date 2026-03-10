@@ -3,24 +3,28 @@ import AppLayout from '../../Layouts/AppLayout';
 import {
     BuildingOfficeIcon,
     MagnifyingGlassIcon,
-    ShieldCheckIcon,
+    UsersIcon,
     PuzzlePieceIcon,
     ChartBarIcon,
     BellIcon,
     AdjustmentsHorizontalIcon,
+    PaintBrushIcon,
 } from '@heroicons/react/24/outline';
+import PageHeader from '../../Components/PageHeader';
+import BrandingSection from './sections/BrandingSection';
 import PartnerTenantSection from './sections/PartnerTenantSection';
 import TenantDiscoverySection from './sections/TenantDiscoverySection';
-import AccessControlSection from './sections/AccessControlSection';
+import UserManagementSection from './sections/UserManagementSection';
 import IntegrationsSection from './sections/IntegrationsSection';
 import ScoringSection from './sections/ScoringSection';
 import NotificationsSection from './sections/NotificationsSection';
 import ThresholdsSection from './sections/ThresholdsSection';
 
 const sections = [
+    { id: 'branding', label: 'Branding', icon: PaintBrushIcon },
     { id: 'partner-tenant', label: 'Partner Tenant', icon: BuildingOfficeIcon },
     { id: 'tenant-discovery', label: 'Tenant Discovery', icon: MagnifyingGlassIcon },
-    { id: 'access-control', label: 'Access Control', icon: ShieldCheckIcon },
+    { id: 'user-management', label: 'User Management', icon: UsersIcon },
     { id: 'integrations', label: 'Integrations', icon: PuzzlePieceIcon },
     { id: 'scoring', label: 'Scoring', icon: ChartBarIcon },
     { id: 'notifications', label: 'Notifications', icon: BellIcon },
@@ -30,10 +34,11 @@ const sections = [
 type SectionId = (typeof sections)[number]['id'];
 
 export default function SettingsIndex() {
-    const [activeSection, setActiveSection] = useState<SectionId>('partner-tenant');
+    const [activeSection, setActiveSection] = useState<SectionId>('branding');
 
     return (
         <AppLayout title="Settings">
+            <PageHeader title="Settings" subtitle="Application configuration" breadcrumbs={[{ label: 'Administration' }, { label: 'Settings' }]} />
             <div className="flex flex-col lg:flex-row gap-6">
                 {/* Sidebar nav */}
                 <nav className="w-full lg:w-56 flex-shrink-0">
@@ -61,9 +66,10 @@ export default function SettingsIndex() {
 
                 {/* Content panel */}
                 <div className="flex-1 min-w-0">
+                    {activeSection === 'branding' && <BrandingSection />}
                     {activeSection === 'partner-tenant' && <PartnerTenantSection />}
                     {activeSection === 'tenant-discovery' && <TenantDiscoverySection />}
-                    {activeSection === 'access-control' && <AccessControlSection />}
+                    {activeSection === 'user-management' && <UserManagementSection />}
                     {activeSection === 'integrations' && <IntegrationsSection />}
                     {activeSection === 'scoring' && <ScoringSection />}
                     {activeSection === 'notifications' && <NotificationsSection />}

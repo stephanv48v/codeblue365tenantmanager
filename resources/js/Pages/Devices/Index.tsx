@@ -1,11 +1,13 @@
+import { useEffect, useState } from 'react';
 import AppLayout from '../../Layouts/AppLayout';
 import {
     ComputerDesktopIcon,
     CheckCircleIcon,
     ExclamationTriangleIcon,
     CogIcon,
+    ClockIcon,
 } from '@heroicons/react/24/outline';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area, CartesianGrid } from 'recharts';
 import StatCard from '../../Components/StatCard';
 import ChartCard from '../../Components/ChartCard';
 import PageHeader from '../../Components/PageHeader';
@@ -15,6 +17,8 @@ import FilterBar from '../../Components/FilterBar';
 import PaginationControls from '../../Components/PaginationControls';
 import DetailPanel from '../../Components/DetailPanel';
 import SectionHeader from '../../Components/SectionHeader';
+import ExportButton from '../../Components/ExportButton';
+import { usePdfReport } from '../../hooks/usePdfReport';
 import { useDevicesData } from './hooks/useDevicesData';
 
 const OS_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899'];
@@ -26,6 +30,61 @@ export default function DevicesIndex() {
         selectedDevice, setSelectedDevice,
         filters, setFilters, fetchInventory,
     } = useDevicesData();
+
+    const { generating, generateReport } = usePdfReport();
+    const [complianceTrend, setComplianceTrend] = useState<Array<{ date: string; score: number }>>([]);
+
+    const handlePdfExport = async () => {
+        if (!overview) return;
+        const d = overview;
+        await generateReport({
+            title: 'Devices Overview Report',
+            subtitle: 'Device compliance and inventory across all tenants',
+            orientation: 'landscape',
+            sections: [
+                {
+                    type: 'stats',
+                    data: [
+                        { label: 'Total Devices', value: d.total },
+                        { label: 'Compliance Rate', value: `${d.compliance_rate}%` },
+                        { label: 'Compliant', value: d.compliant },
+                        { label: 'Non-Compliant', value: d.non_compliant },
+                        { label: 'Managed', value: d.managed },
+                    ],
+                },
+                { type: 'chart', elementId: 'devices-os-chart', title: 'OS Distribution' },
+                { type: 'chart', elementId: 'devices-compliance-chart', title: 'Compliance by Tenant' },
+                {
+                    type: 'table',
+                    title: 'Device Inventory (Top 50)',
+                    headers: ['Name', 'OS', 'Compliance', 'Managed By', 'Tenant'],
+                    rows: inventory.slice(0, 50).map((dev) => [
+                        dev.display_name,
+                        dev.os ?? '',
+                        dev.compliance_state ?? '',
+                        dev.managed_by ?? 'Unmanaged',
+                        dev.customer_name ?? dev.tenant_id,
+                    ]),
+                },
+            ],
+        });
+    };
+
+    useEffect(() => {
+        fetch('/api/v1/security/posture/history')
+            .then((r) => r.json())
+            .then((res) => {
+                if (res.success && Array.isArray(res.data)) {
+                    setComplianceTrend(
+                        res.data.map((p: any) => ({
+                            date: new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                            score: p.device_currency ?? 0,
+                        })),
+                    );
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     const handleFilterChange = (key: string, value: string) => {
         const newFilters = { ...filters, [key]: value };
@@ -58,6 +117,13 @@ export default function DevicesIndex() {
 
     const d = overview!;
 
+    // Stale devices: last_sync_at older than 30 days or null
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const staleCount = inventory.filter(
+        (dev) => !dev.last_sync_at || new Date(dev.last_sync_at) < thirtyDaysAgo,
+    ).length;
+
     const osData = d.os_distribution.map((os, i) => ({
         name: os.os || 'Unknown',
         value: os.count,
@@ -79,9 +145,10 @@ export default function DevicesIndex() {
                 title="Devices"
                 subtitle="Device compliance and inventory across all tenants"
                 breadcrumbs={[{ label: 'Devices' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/device-compliance" onExportPdf={handlePdfExport} pdfGenerating={generating} />}
             />
 
-            <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                 <StatCard label="Total Devices" value={d.total} icon={ComputerDesktopIcon} accentColor="blue" />
                 <StatCard
                     label="Compliance Rate"
@@ -92,10 +159,27 @@ export default function DevicesIndex() {
                 <StatCard label="Compliant" value={d.compliant} accentColor="emerald" />
                 <StatCard label="Non-Compliant" value={d.non_compliant} icon={ExclamationTriangleIcon} accentColor="red" />
                 <StatCard label="Managed" value={d.managed} icon={CogIcon} accentColor="blue" subtitle={`${d.unmanaged} unmanaged`} />
+                <StatCard label="Stale Devices" value={staleCount} icon={ClockIcon} accentColor={staleCount > 0 ? 'amber' : 'emerald'} subtitle="No sync in 30+ days" />
             </div>
 
+            {complianceTrend.length > 0 && (
+                <div className="mb-6">
+                    <ChartCard title="Device Compliance Trend" subtitle="Compliance score over time">
+                        <ResponsiveContainer width="100%" height={200}>
+                            <AreaChart data={complianceTrend}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} tickLine={false} />
+                                <Tooltip formatter={(value: number) => [`${value}%`, 'Compliance']} />
+                                <Area type="monotone" dataKey="score" stroke="#3b82f6" fill="#3b82f633" name="Compliance %" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </ChartCard>
+                </div>
+            )}
+
             <div className="mb-6 grid gap-6 lg:grid-cols-12">
-                <ChartCard title="OS Distribution" className="lg:col-span-4">
+                <ChartCard title="OS Distribution" className="lg:col-span-4" id="devices-os-chart">
                     <ResponsiveContainer width="100%" height={280}>
                         <PieChart>
                             <Pie data={osData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
@@ -109,7 +193,7 @@ export default function DevicesIndex() {
                     </ResponsiveContainer>
                 </ChartCard>
 
-                <ChartCard title="Compliance by Tenant" className="lg:col-span-8">
+                <ChartCard title="Compliance by Tenant" className="lg:col-span-8" id="devices-compliance-chart">
                     <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={complianceByTenant} layout="vertical">
                             <XAxis type="number" />

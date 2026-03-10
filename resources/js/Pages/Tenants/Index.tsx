@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { Link } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
@@ -174,11 +175,26 @@ export default function TenantsIndex() {
                 <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
                     <h3 className="mb-4 text-sm font-semibold text-slate-800">Add New Tenant</h3>
                     <form onSubmit={onCreateTenant} className="grid gap-3 md:grid-cols-2">
-                        <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Tenant ID" value={form.tenant_id} onChange={(e) => setForm((p) => ({ ...p, tenant_id: e.target.value }))} required />
-                        <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Customer Name" value={form.customer_name} onChange={(e) => setForm((p) => ({ ...p, customer_name: e.target.value }))} required />
-                        <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Primary Domain" value={form.primary_domain} onChange={(e) => setForm((p) => ({ ...p, primary_domain: e.target.value }))} required />
-                        <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Support Tier" value={form.support_tier} onChange={(e) => setForm((p) => ({ ...p, support_tier: e.target.value }))} />
-                        <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Assigned Engineer" value={form.assigned_engineer} onChange={(e) => setForm((p) => ({ ...p, assigned_engineer: e.target.value }))} />
+                        <div className="flex flex-col gap-1">
+                            <label htmlFor="tenant_id" className="text-xs font-medium text-slate-700">Tenant ID</label>
+                            <input id="tenant_id" className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Tenant ID" value={form.tenant_id} onChange={(e) => setForm((p) => ({ ...p, tenant_id: e.target.value }))} required />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label htmlFor="customer_name" className="text-xs font-medium text-slate-700">Customer Name</label>
+                            <input id="customer_name" className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Customer Name" value={form.customer_name} onChange={(e) => setForm((p) => ({ ...p, customer_name: e.target.value }))} required />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label htmlFor="primary_domain" className="text-xs font-medium text-slate-700">Primary Domain</label>
+                            <input id="primary_domain" className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Primary Domain" value={form.primary_domain} onChange={(e) => setForm((p) => ({ ...p, primary_domain: e.target.value }))} required />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label htmlFor="support_tier" className="text-xs font-medium text-slate-700">Support Tier</label>
+                            <input id="support_tier" className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Support Tier" value={form.support_tier} onChange={(e) => setForm((p) => ({ ...p, support_tier: e.target.value }))} />
+                        </div>
+                        <div className="flex flex-col gap-1 md:col-span-2">
+                            <label htmlFor="assigned_engineer" className="text-xs font-medium text-slate-700">Assigned Engineer</label>
+                            <input id="assigned_engineer" className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Assigned Engineer" value={form.assigned_engineer} onChange={(e) => setForm((p) => ({ ...p, assigned_engineer: e.target.value }))} />
+                        </div>
                         <div className="flex gap-2">
                             <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" type="submit">Create Tenant</button>
                             <button className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" type="button" onClick={() => setShowForm(false)}>Cancel</button>
@@ -212,9 +228,9 @@ export default function TenantsIndex() {
                             ) : tenants.map((tenant) => (
                                 <tr key={tenant.tenant_id} className="hover:bg-slate-50">
                                     <td className="whitespace-nowrap px-4 py-3">
-                                        <a href={`/tenants/${tenant.tenant_id}`} className="font-medium text-blue-600 hover:text-blue-800">
+                                        <Link href={`/tenants/${tenant.tenant_id}`} className="font-medium text-blue-600 hover:text-blue-800">
                                             {tenant.customer_name}
-                                        </a>
+                                        </Link>
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-3 text-slate-500">{tenant.primary_domain}</td>
                                     <td className="whitespace-nowrap px-4 py-3">

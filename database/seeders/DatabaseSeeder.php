@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             IntegrationsSeeder::class,
             IntegrationPlaybooksSeeder::class,
             DemoDataSeeder::class,
+            GapAnalysisDemoSeeder::class,
         ]);
     }
 }

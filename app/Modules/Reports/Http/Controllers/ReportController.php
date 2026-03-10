@@ -270,6 +270,375 @@ class ReportController extends Controller
         ])->toArray());
     }
 
+    public function exportAdminAccounts(Request $request): StreamedResponse
+    {
+        $query = DB::table('directory_role_assignments')
+            ->leftJoin('managed_tenants', 'directory_role_assignments.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['directory_role_assignments.*', 'managed_tenants.customer_name'])
+            ->orderBy('directory_role_assignments.display_name');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('directory_role_assignments.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('admin_accounts_export.csv', [
+            'Display Name', 'UPN', 'Customer', 'Role', 'Assignment Type', 'Status', 'Start Date', 'End Date',
+        ], $records->map(fn ($r) => [
+            $r->display_name,
+            $r->user_principal_name,
+            $r->customer_name ?? '',
+            $r->role_display_name,
+            $r->assignment_type ?? '',
+            $r->status ?? '',
+            $r->start_date ?? '',
+            $r->end_date ?? '',
+        ])->toArray());
+    }
+
+    public function exportGuestUsers(Request $request): StreamedResponse
+    {
+        $query = DB::table('guest_users')
+            ->leftJoin('managed_tenants', 'guest_users.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['guest_users.*', 'managed_tenants.customer_name'])
+            ->orderBy('guest_users.display_name');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('guest_users.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('guest_users_export.csv', [
+            'Display Name', 'UPN', 'Email', 'Customer', 'Domain', 'Company', 'State', 'Created', 'Last Sign-In', 'Enabled',
+        ], $records->map(fn ($r) => [
+            $r->display_name,
+            $r->user_principal_name,
+            $r->mail ?? '',
+            $r->customer_name ?? '',
+            $r->domain ?? '',
+            $r->company_name ?? '',
+            $r->external_user_state ?? '',
+            $r->created_at ?? '',
+            $r->last_sign_in_at ?? '',
+            $r->account_enabled ? 'Yes' : 'No',
+        ])->toArray());
+    }
+
+    public function exportRiskyUsers(Request $request): StreamedResponse
+    {
+        $query = DB::table('risky_users')
+            ->leftJoin('managed_tenants', 'risky_users.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['risky_users.*', 'managed_tenants.customer_name'])
+            ->orderByRaw("CASE risky_users.risk_level WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END");
+
+        if ($request->filled('tenant_id')) {
+            $query->where('risky_users.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('risky_users_export.csv', [
+            'Display Name', 'UPN', 'Customer', 'Risk Level', 'Risk State', 'Risk Detail', 'Last Updated',
+        ], $records->map(fn ($r) => [
+            $r->display_name,
+            $r->user_principal_name,
+            $r->customer_name ?? '',
+            $r->risk_level,
+            $r->risk_state,
+            $r->risk_detail ?? '',
+            $r->risk_last_updated_at ?? '',
+        ])->toArray());
+    }
+
+    public function exportConditionalAccess(Request $request): StreamedResponse
+    {
+        $query = DB::table('conditional_access_policies')
+            ->leftJoin('managed_tenants', 'conditional_access_policies.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['conditional_access_policies.*', 'managed_tenants.customer_name'])
+            ->orderBy('conditional_access_policies.display_name');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('conditional_access_policies.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('conditional_access_export.csv', [
+            'Policy Name', 'Customer', 'State', 'Conditions', 'Grant Controls', 'Session Controls',
+        ], $records->map(fn ($r) => [
+            $r->display_name,
+            $r->customer_name ?? '',
+            $r->state,
+            $r->conditions ? implode('; ', array_map(fn ($k, $v) => $k . ': ' . (is_array($v) ? json_encode($v) : $v), array_keys($decoded = json_decode($r->conditions, true) ?? []), array_values($decoded))) : '',
+            $r->grant_controls ? implode('; ', array_map(fn ($k, $v) => $k . ': ' . (is_array($v) ? implode(', ', $v) : $v), array_keys($grantDecoded = json_decode($r->grant_controls, true) ?? []), array_values($grantDecoded))) : '',
+            '',
+        ])->toArray());
+    }
+
+    public function exportSignInActivity(Request $request): StreamedResponse
+    {
+        $query = DB::table('sign_in_summaries')
+            ->leftJoin('managed_tenants', 'sign_in_summaries.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['sign_in_summaries.*', 'managed_tenants.customer_name'])
+            ->orderByDesc('sign_in_summaries.date');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('sign_in_summaries.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('sign_in_activity_export.csv', [
+            'Customer', 'Date', 'Total Sign-Ins', 'Successful', 'Failed', 'MFA Prompted',
+            'MFA Succeeded', 'MFA Failed', 'Unique Users', 'Top Failure Reason',
+        ], $records->map(fn ($r) => [
+            $r->customer_name ?? '',
+            $r->date,
+            $r->total_sign_ins,
+            $r->successful_sign_ins,
+            $r->failed_sign_ins,
+            $r->mfa_prompted,
+            $r->mfa_succeeded,
+            $r->mfa_failed,
+            $r->unique_users,
+            $r->top_failure_reason ?? '',
+        ])->toArray());
+    }
+
+    public function exportAuthMethods(Request $request): StreamedResponse
+    {
+        $query = DB::table('authentication_method_stats')
+            ->leftJoin('managed_tenants', 'authentication_method_stats.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['authentication_method_stats.*', 'managed_tenants.customer_name'])
+            ->orderBy('managed_tenants.customer_name');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('authentication_method_stats.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('auth_methods_export.csv', [
+            'Customer', 'Total Users', 'MFA Capable %', 'Authenticator App', 'FIDO2',
+            'Windows Hello', 'Phone SMS', 'Phone Call', 'Email OTP', 'Password Only',
+            'Passwordless', 'SSPR Capable', 'SSPR Registered',
+        ], $records->map(fn ($r) => [
+            $r->customer_name ?? '',
+            $r->total_users,
+            $r->total_users > 0 ? round(($r->mfa_capable_users / $r->total_users) * 100, 1) : 0,
+            $r->authenticator_app_count,
+            $r->fido2_count,
+            $r->windows_hello_count,
+            $r->phone_sms_count,
+            $r->phone_call_count,
+            $r->email_otp_count,
+            $r->password_only_count,
+            $r->passwordless_count,
+            $r->sspr_capable_count,
+            $r->sspr_registered_count,
+        ])->toArray());
+    }
+
+    public function exportAlerts(Request $request): StreamedResponse
+    {
+        $query = DB::table('alerts')
+            ->leftJoin('managed_tenants', 'alerts.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['alerts.*', 'managed_tenants.customer_name'])
+            ->orderByDesc('alerts.created_at');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('alerts.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('alerts_export.csv', [
+            'ID', 'Customer', 'Type', 'Severity', 'Title', 'Message', 'Status',
+            'Acknowledged By', 'Acknowledged At', 'Created At',
+        ], $records->map(fn ($r) => [
+            $r->id,
+            $r->customer_name ?? '',
+            $r->type,
+            $r->severity,
+            $r->title,
+            $r->message ?? '',
+            $r->status,
+            $r->acknowledged_by ?? '',
+            $r->acknowledged_at ?? '',
+            $r->created_at,
+        ])->toArray());
+    }
+
+    public function exportRecommendations(Request $request): StreamedResponse
+    {
+        $query = DB::table('recommendations')
+            ->leftJoin('managed_tenants', 'recommendations.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['recommendations.*', 'managed_tenants.customer_name'])
+            ->orderByRaw("CASE recommendations.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END");
+
+        if ($request->filled('tenant_id')) {
+            $query->where('recommendations.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('recommendations_export.csv', [
+            'ID', 'Customer', 'Priority', 'Title', 'Description', 'Status', 'Action URL', 'Created At',
+        ], $records->map(fn ($r) => [
+            $r->id,
+            $r->customer_name ?? '',
+            $r->priority,
+            $r->title,
+            $r->description ?? '',
+            $r->status,
+            $r->action_url ?? '',
+            $r->created_at,
+        ])->toArray());
+    }
+
+    public function exportComplianceControls(Request $request): StreamedResponse
+    {
+        $controls = DB::table('compliance_controls')
+            ->join('compliance_frameworks', 'compliance_controls.framework_id', '=', 'compliance_frameworks.id')
+            ->select([
+                'compliance_controls.id as control_id',
+                'compliance_frameworks.name as framework_name',
+                'compliance_frameworks.version as framework_version',
+                'compliance_controls.control_ref',
+                'compliance_controls.title',
+                'compliance_controls.category',
+            ])
+            ->orderBy('compliance_frameworks.name')
+            ->orderBy('compliance_controls.control_ref')
+            ->get();
+
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
+        $rows = $controls->map(function ($c) use ($tenantId) {
+            $mappings = DB::table('compliance_control_mappings')
+                ->where('control_id', $c->control_id)
+                ->pluck('finding_rule_key')
+                ->toArray();
+
+            if (empty($mappings)) {
+                $status = 'Not Mapped';
+                $openFindings = 0;
+            } else {
+                $findingsQuery = DB::table('findings')
+                    ->whereIn('rule_key', $mappings)
+                    ->whereNotIn('status', ['dismissed', 'resolved']);
+
+                if ($tenantId) {
+                    $findingsQuery->where('tenant_id', $tenantId);
+                }
+
+                $openFindings = $findingsQuery->count();
+                $status = $openFindings > 0 ? 'Non-Compliant' : 'Compliant';
+            }
+
+            return [
+                $c->framework_name,
+                $c->framework_version ?? '',
+                $c->control_ref,
+                $c->title,
+                $c->category ?? '',
+                $status,
+                $openFindings,
+            ];
+        })->toArray();
+
+        return $this->streamCsv('compliance_controls_export.csv', [
+            'Framework', 'Version', 'Control Ref', 'Title', 'Category', 'Status', 'Open Findings Count',
+        ], $rows);
+    }
+
+    public function exportCopilotAgents(Request $request): StreamedResponse
+    {
+        $query = DB::table('copilot_agents')
+            ->leftJoin('managed_tenants', 'copilot_agents.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['copilot_agents.*', 'managed_tenants.customer_name'])
+            ->orderBy('copilot_agents.display_name');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('copilot_agents.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('copilot_agents_export.csv', [
+            'Name', 'Customer', 'Agent Type', 'Status', 'Created By', 'Data Sources',
+            'Interaction Count', 'Last Activity',
+        ], $records->map(fn ($r) => [
+            $r->display_name,
+            $r->customer_name ?? '',
+            $r->agent_type,
+            $r->status,
+            $r->created_by ?? '',
+            $r->data_sources ? implode('; ', json_decode($r->data_sources, true) ?? []) : '',
+            $r->interaction_count,
+            $r->last_activity_at ?? '',
+        ])->toArray());
+    }
+
+    public function exportSyncRuns(Request $request): StreamedResponse
+    {
+        $query = DB::table('sync_runs')
+            ->leftJoin('managed_tenants', 'sync_runs.tenant_id', '=', 'managed_tenants.tenant_id')
+            ->select(['sync_runs.*', 'managed_tenants.customer_name'])
+            ->orderByDesc('sync_runs.started_at');
+
+        if ($request->filled('tenant_id')) {
+            $query->where('sync_runs.tenant_id', (string) $request->string('tenant_id'));
+        }
+
+        $records = $query->get();
+
+        return $this->streamCsv('sync_runs_export.csv', [
+            'Customer', 'Job', 'Status', 'Records Processed', 'Started At', 'Finished At', 'Duration',
+        ], $records->map(fn ($r) => [
+            $r->customer_name ?? '',
+            $r->sync_job,
+            $r->status,
+            $r->records_processed,
+            $r->started_at ?? '',
+            $r->finished_at ?? '',
+            ($r->started_at && $r->finished_at) ? (strtotime($r->finished_at) - strtotime($r->started_at)) . 's' : 'N/A',
+        ])->toArray());
+    }
+
+    public function exportCopilotAudit(Request $request): StreamedResponse
+    {
+        $tenantId = $request->filled('tenant_id') ? (string) $request->string('tenant_id') : null;
+
+        $controller = new \App\Modules\Copilot\Http\Controllers\CopilotDashboardController();
+
+        // Build a synthetic request and call the audit endpoint to get the data
+        $auditRequest = Request::create('/api/v1/copilot/audit', 'GET', $tenantId ? ['tenant_id' => $tenantId] : []);
+        $response = $controller->audit($auditRequest);
+        $data = json_decode($response->getContent(), true)['data'] ?? [];
+
+        $rows = [];
+        foreach ($data['categories'] ?? [] as $category) {
+            foreach ($category['checks'] ?? [] as $check) {
+                $rows[] = [
+                    $category['name'],
+                    $check['name'] ?? '',
+                    $check['status'] ?? '',
+                    is_array($check['value'] ?? null) ? json_encode($check['value']) : (string) ($check['value'] ?? ''),
+                    $check['target'] ?? '',
+                    $check['detail'] ?? '',
+                    $check['remediation'] ?? '',
+                ];
+            }
+        }
+
+        return $this->streamCsv('copilot_audit_export.csv', [
+            'Category', 'Check Name', 'Status', 'Current Value', 'Target', 'Detail', 'Remediation',
+        ], $rows);
+    }
+
     /** @param array<int, array<int, mixed>> $rows */
     private function streamCsv(string $filename, array $headers, array $rows): StreamedResponse
     {

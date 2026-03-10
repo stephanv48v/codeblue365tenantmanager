@@ -1,6 +1,5 @@
 import {
     Bars3Icon,
-    MagnifyingGlassIcon,
     BellIcon,
     Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
@@ -28,6 +27,7 @@ export default function TopHeader({ title, user, onMenuToggle }: Props) {
             <div className="flex items-center gap-4">
                 <button
                     onClick={onMenuToggle}
+                    aria-label="Toggle menu"
                     className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
                 >
                     <Bars3Icon className="h-6 w-6" />
@@ -37,23 +37,15 @@ export default function TopHeader({ title, user, onMenuToggle }: Props) {
                 <TenantSelector />
             </div>
 
-            {/* Center: search */}
-            <div className="hidden items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 md:flex">
-                <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />
-                <input
-                    type="text"
-                    placeholder="Search..."
-                    className="border-0 bg-transparent text-sm text-slate-600 placeholder-slate-400 focus:outline-none focus:ring-0"
-                    style={{ width: '200px' }}
-                />
-            </div>
+            {/* Search - placeholder for future implementation */}
+            <div className="hidden md:block" />
 
             {/* Right: icons + avatar */}
             <div className="flex items-center gap-3">
-                <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+                <button aria-label="Notifications" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
                     <BellIcon className="h-5 w-5" />
                 </button>
-                <Link href="/settings" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
+                <Link href="/settings" aria-label="Settings" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
                     <Cog6ToothIcon className="h-5 w-5" />
                 </Link>
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">

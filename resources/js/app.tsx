@@ -1,6 +1,7 @@
 import { createInertiaApp } from '@inertiajs/react';
 import { createRoot } from 'react-dom/client';
 import { TenantProvider } from './contexts/TenantContext';
+import { BrandingProvider } from './contexts/BrandingContext';
 
 createInertiaApp({
     title: (title) => (title ? `${title} - CodeBlue 365` : 'CodeBlue 365 Tenant Manager'),
@@ -14,7 +15,9 @@ createInertiaApp({
     setup({ el, App, props }) {
         createRoot(el).render(
             <TenantProvider>
-                <App {...props} />
+                <BrandingProvider>
+                    <App {...props} />
+                </BrandingProvider>
             </TenantProvider>
         );
     },

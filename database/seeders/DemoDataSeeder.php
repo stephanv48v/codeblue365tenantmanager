@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -31,10 +32,15 @@ class DemoDataSeeder extends Seeder
         $this->seedAlerts();
         $this->seedSyncRuns();
         $this->seedRecommendations();
+        $this->seedCompliance();
         $this->seedCopilotUsage();
         $this->seedCopilotAgents();
         $this->seedSharePointSites();
         $this->seedCopilotReadiness();
+        $this->seedAuthMethodStats();
+        $this->seedDirectoryRoleAssignments();
+        $this->seedGuestUsers();
+        $this->seedSignInSummaries();
     }
 
     // ─── Tenants ──────────────────────────────────────────────
@@ -776,18 +782,216 @@ class DemoDataSeeder extends Seeder
     {
         $findings = DB::table('findings')->where('status', 'open')->get();
 
+        // Finding-linked recommendations
         foreach ($findings as $finding) {
+            $priority = match ($finding->severity) {
+                'critical' => 'critical',
+                'high' => 'high',
+                'medium' => 'medium',
+                default => 'low',
+            };
+
+            $statusRoll = rand(1, 100);
+            $status = $statusRoll <= 50 ? 'open' : ($statusRoll <= 75 ? 'in_progress' : 'resolved');
+
             DB::table('recommendations')->insert([
                 'tenant_id' => $finding->tenant_id,
                 'finding_id' => $finding->id,
-                'priority' => $finding->severity === 'critical' ? 'high' : ($finding->severity === 'high' ? 'high' : 'medium'),
+                'priority' => $priority,
                 'title' => 'Remediate: ' . str_replace('_', ' ', $finding->rule_key),
                 'description' => $finding->recommended_remediation,
                 'action_url' => 'https://admin.microsoft.com',
-                'status' => 'open',
+                'status' => $status,
+                'created_at' => now()->subDays(rand(0, 14)),
+                'updated_at' => now(),
+            ]);
+        }
+
+        // Standalone recommendations (not linked to specific findings)
+        $standaloneRecs = [
+            ['priority' => 'high', 'title' => 'Enable Security Defaults for tenants without Conditional Access', 'description' => 'Tenants without P1 licensing should enable Security Defaults as a baseline MFA policy. This provides basic protection at no additional cost.', 'url' => 'https://entra.microsoft.com/#view/Microsoft_AAD_IAM/SecurityDefaultsBlade'],
+            ['priority' => 'medium', 'title' => 'Review and update GDAP role assignments', 'description' => 'Audit current GDAP role assignments to ensure least-privilege access. Remove unnecessary Global Admin roles and replace with specific admin roles.', 'url' => 'https://partner.microsoft.com/dashboard/commerce2/granularadminaccess/list'],
+            ['priority' => 'critical', 'title' => 'Deploy Conditional Access policy for risky sign-ins', 'description' => 'Create a CA policy requiring MFA or blocking access for high-risk sign-ins detected by Entra Identity Protection.', 'url' => 'https://entra.microsoft.com/#view/Microsoft_AAD_ConditionalAccess/ConditionalAccessBlade/~/Policies'],
+            ['priority' => 'low', 'title' => 'Configure automated license reclamation', 'description' => 'Set up automated workflows to reclaim licenses from users inactive for 90+ days, reducing license waste and associated costs.', 'url' => 'https://admin.microsoft.com/Adminportal/Home#/licenses'],
+            ['priority' => 'medium', 'title' => 'Enable unified audit logging across all tenants', 'description' => 'Ensure unified audit logging is enabled in all customer tenants for compliance and incident investigation readiness.', 'url' => 'https://compliance.microsoft.com/auditlogsearch'],
+            ['priority' => 'high', 'title' => 'Implement data loss prevention policies', 'description' => 'Deploy DLP policies to detect and prevent sharing of sensitive information such as credit card numbers, SSNs, and health records.', 'url' => 'https://compliance.microsoft.com/datalossprevention'],
+            ['priority' => 'medium', 'title' => 'Configure sensitivity labels for Microsoft 365', 'description' => 'Publish sensitivity labels and auto-labeling policies to classify and protect documents containing sensitive data.', 'url' => 'https://compliance.microsoft.com/informationprotection'],
+            ['priority' => 'low', 'title' => 'Schedule quarterly access reviews', 'description' => 'Implement recurring access reviews for privileged roles and guest accounts to maintain least-privilege access and compliance.', 'url' => 'https://entra.microsoft.com/#view/Microsoft_AAD_ERM/DashboardBlade/~/Controls/fromNav/Identity'],
+        ];
+
+        $tenants = DB::table('managed_tenants')
+            ->where('gdap_status', '!=', 'pending')
+            ->pluck('tenant_id')
+            ->toArray();
+
+        foreach ($standaloneRecs as $rec) {
+            // Assign to 2-4 random tenants
+            $assignCount = rand(2, min(4, count($tenants)));
+            $selectedTenants = array_rand(array_flip($tenants), $assignCount);
+            if (!is_array($selectedTenants)) {
+                $selectedTenants = [$selectedTenants];
+            }
+
+            foreach ($selectedTenants as $tenantId) {
+                $statusRoll = rand(1, 100);
+                $status = $statusRoll <= 50 ? 'open' : ($statusRoll <= 75 ? 'in_progress' : 'resolved');
+
+                DB::table('recommendations')->insert([
+                    'tenant_id' => $tenantId,
+                    'finding_id' => null,
+                    'priority' => $rec['priority'],
+                    'title' => $rec['title'],
+                    'description' => $rec['description'],
+                    'action_url' => $rec['url'],
+                    'status' => $status,
+                    'created_at' => now()->subDays(rand(0, 30)),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    // ─── Compliance ──────────────────────────────────────────
+
+    private function seedCompliance(): void
+    {
+        // Insert 3 compliance frameworks
+        $frameworkCis = DB::table('compliance_frameworks')->insertGetId([
+            'name' => 'CIS Microsoft 365 Benchmarks',
+            'slug' => 'cis-microsoft-365',
+            'version' => 'v3.1',
+            'description' => 'Center for Internet Security benchmarks for Microsoft 365 configuration.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $frameworkNist = DB::table('compliance_frameworks')->insertGetId([
+            'name' => 'NIST Cybersecurity Framework',
+            'slug' => 'nist-csf',
+            'version' => 'v2.0',
+            'description' => 'National Institute of Standards and Technology Cybersecurity Framework.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $frameworkNzism = DB::table('compliance_frameworks')->insertGetId([
+            'name' => 'NZ Information Security Manual',
+            'slug' => 'nzism',
+            'version' => 'v3.7',
+            'description' => 'New Zealand Government Communications Security Bureau (GCSB) Information Security Manual — mandatory security controls for NZ government and recommended for NZ businesses.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // ─── CIS Microsoft 365 Benchmarks v3.1 (15 controls) ────
+        $cisControls = [
+            ['control_ref' => '1.1.1', 'title' => 'Ensure MFA is enabled for all users', 'category' => 'Identity', 'rule_key' => 'mfa_coverage_below_90'],
+            ['control_ref' => '1.1.3', 'title' => 'Ensure fewer than 5 Global Admins', 'category' => 'Identity', 'rule_key' => 'global_admins_above_4'],
+            ['control_ref' => '1.1.6', 'title' => 'Ensure legacy authentication is blocked', 'category' => 'Identity', 'rule_key' => 'legacy_auth_not_blocked'],
+            ['control_ref' => '1.1.9', 'title' => 'Ensure Conditional Access policies are configured', 'category' => 'Identity', 'rule_key' => 'conditional_access_gaps'],
+            ['control_ref' => '1.1.15', 'title' => 'Ensure stale accounts are reviewed', 'category' => 'Identity', 'rule_key' => 'stale_users_detected'],
+            ['control_ref' => '2.1.1', 'title' => 'Ensure Secure Score is above 50%', 'category' => 'Security', 'rule_key' => 'secure_score_below_50_percent'],
+            ['control_ref' => '3.1.1', 'title' => 'Ensure device compliance is enforced', 'category' => 'Devices', 'rule_key' => 'device_compliance_below_90'],
+            ['control_ref' => '5.1.1', 'title' => 'Ensure license utilization is monitored', 'category' => 'Licensing', 'rule_key' => 'license_waste_above_10_percent'],
+            ['control_ref' => '5.2.1', 'title' => 'Ensure GDAP relationships are current', 'category' => 'Governance', 'rule_key' => 'gdap_expiry_approaching'],
+            ['control_ref' => '1.2.1', 'title' => 'Ensure sign-in risk policy is configured', 'category' => 'Identity', 'rule_key' => null],
+            ['control_ref' => '2.2.1', 'title' => 'Ensure audit logging is enabled', 'category' => 'Security', 'rule_key' => null],
+            ['control_ref' => '3.2.1', 'title' => 'Ensure BitLocker is enforced', 'category' => 'Devices', 'rule_key' => null],
+            ['control_ref' => '4.1.1', 'title' => 'Ensure DLP policies are defined', 'category' => 'Data Protection', 'rule_key' => null],
+            ['control_ref' => '4.2.1', 'title' => 'Ensure sensitivity labels are published', 'category' => 'Data Protection', 'rule_key' => null],
+            ['control_ref' => '5.3.1', 'title' => 'Ensure Partner Center alerts are monitored', 'category' => 'Governance', 'rule_key' => null],
+        ];
+
+        foreach ($cisControls as $control) {
+            $controlId = DB::table('compliance_controls')->insertGetId([
+                'framework_id' => $frameworkCis,
+                'control_ref' => $control['control_ref'],
+                'title' => $control['title'],
+                'category' => $control['category'],
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            if ($control['rule_key']) {
+                DB::table('compliance_control_mappings')->insert([
+                    'control_id' => $controlId,
+                    'finding_rule_key' => $control['rule_key'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        // ─── NIST CSF v2.0 (12 controls) ────────────────────────
+        $nistControls = [
+            ['control_ref' => 'PR.AA-01', 'title' => 'Identities and credentials are managed', 'category' => 'Protect', 'rule_key' => 'mfa_coverage_below_90'],
+            ['control_ref' => 'PR.AA-02', 'title' => 'Authentication mechanisms are protected', 'category' => 'Protect', 'rule_key' => 'legacy_auth_not_blocked'],
+            ['control_ref' => 'PR.AA-03', 'title' => 'Privileged access is managed', 'category' => 'Protect', 'rule_key' => 'global_admins_above_4'],
+            ['control_ref' => 'PR.AA-05', 'title' => 'Access policies are enforced', 'category' => 'Protect', 'rule_key' => 'conditional_access_gaps'],
+            ['control_ref' => 'PR.PS-01', 'title' => 'Configuration baselines are maintained', 'category' => 'Protect', 'rule_key' => 'device_compliance_below_90'],
+            ['control_ref' => 'ID.AM-02', 'title' => 'Software and assets are inventoried', 'category' => 'Identify', 'rule_key' => 'license_waste_above_10_percent'],
+            ['control_ref' => 'ID.RA-01', 'title' => 'Risk assessments are performed', 'category' => 'Identify', 'rule_key' => 'secure_score_below_50_percent'],
+            ['control_ref' => 'DE.AE-02', 'title' => 'Anomalous behavior is detected', 'category' => 'Detect', 'rule_key' => 'risky_users_active'],
+            ['control_ref' => 'GV.SC-04', 'title' => 'Supply chain risk is managed', 'category' => 'Govern', 'rule_key' => 'gdap_expiry_approaching'],
+            ['control_ref' => 'DE.CM-01', 'title' => 'Networks and environments are monitored', 'category' => 'Detect', 'rule_key' => null],
+            ['control_ref' => 'RS.AN-01', 'title' => 'Incidents are analyzed', 'category' => 'Respond', 'rule_key' => null],
+            ['control_ref' => 'RC.RP-01', 'title' => 'Recovery plans are executed', 'category' => 'Recover', 'rule_key' => null],
+        ];
+
+        foreach ($nistControls as $control) {
+            $controlId = DB::table('compliance_controls')->insertGetId([
+                'framework_id' => $frameworkNist,
+                'control_ref' => $control['control_ref'],
+                'title' => $control['title'],
+                'category' => $control['category'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if ($control['rule_key']) {
+                DB::table('compliance_control_mappings')->insert([
+                    'control_id' => $controlId,
+                    'finding_rule_key' => $control['rule_key'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        // ─── NZISM v3.7 (10 controls) ─────────────────────────
+        // NZ Information Security Manual — GCSB mandatory controls
+        // Some controls map to multiple rule_keys
+        $nzismControls = [
+            ['control_ref' => 'NZISM-11.1', 'title' => 'Multi-factor Authentication for All Users', 'category' => 'Access Control', 'rule_keys' => ['mfa_coverage_below_90']],
+            ['control_ref' => 'NZISM-11.2', 'title' => 'Privileged Access Management', 'category' => 'Access Control', 'rule_keys' => ['global_admins_above_4', 'stale_users_detected']],
+            ['control_ref' => 'NZISM-11.3', 'title' => 'Legacy Authentication Protocol Restrictions', 'category' => 'Access Control', 'rule_keys' => ['legacy_auth_not_blocked']],
+            ['control_ref' => 'NZISM-11.4', 'title' => 'Conditional Access Policy Enforcement', 'category' => 'Access Control', 'rule_keys' => ['conditional_access_gaps']],
+            ['control_ref' => 'NZISM-16.1', 'title' => 'Endpoint Patch and Compliance Management', 'category' => 'Software Security', 'rule_keys' => ['device_compliance_below_90']],
+            ['control_ref' => 'NZISM-5.1', 'title' => 'Continuous Security Monitoring', 'category' => 'Information Security Monitoring', 'rule_keys' => ['secure_score_below_50_percent']],
+            ['control_ref' => 'NZISM-5.2', 'title' => 'Anomalous Activity Detection and Response', 'category' => 'Information Security Monitoring', 'rule_keys' => ['risky_users_active']],
+            ['control_ref' => 'NZISM-2.1', 'title' => 'Information Asset and License Management', 'category' => 'Information Security Governance', 'rule_keys' => ['license_waste_above_10_percent']],
+            ['control_ref' => 'NZISM-19.1', 'title' => 'Third-Party and Supply Chain Security', 'category' => 'Gateway Security', 'rule_keys' => ['gdap_expiry_approaching']],
+            ['control_ref' => 'NZISM-12.1', 'title' => 'Cryptographic Controls and Key Management', 'category' => 'Cryptography', 'rule_keys' => []],
+        ];
+
+        foreach ($nzismControls as $control) {
+            $controlId = DB::table('compliance_controls')->insertGetId([
+                'framework_id' => $frameworkNzism,
+                'control_ref' => $control['control_ref'],
+                'title' => $control['title'],
+                'category' => $control['category'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            foreach ($control['rule_keys'] as $ruleKey) {
+                DB::table('compliance_control_mappings')->insert([
+                    'control_id' => $controlId,
+                    'finding_rule_key' => $ruleKey,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
     }
 
@@ -803,14 +1007,97 @@ class DemoDataSeeder extends Seeder
         $lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Wilson', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson', 'White', 'Harris', 'Martin', 'Thompson'];
 
         foreach ($tenants as $tenant) {
-            $userCount = rand(15, 30);
+            $userCount = rand(20, 30);
             $licenseRate = $tenant->primary_domain === 'litware.io' ? 0.30 : 0.60;
 
+            // Reserve slots for specific patterns
+            $neverUsedCount = rand(3, 5);
+            $inactiveCount = rand(2, 3);
+            $powerUserCount = rand(3, 5);
+            $specialSlots = $neverUsedCount + $inactiveCount + $powerUserCount;
+            $userCount = max($userCount, $specialSlots + 5); // ensure room for regular users too
+
             $rows = [];
-            for ($i = 0; $i < $userCount; $i++) {
-                $first = $firstNames[array_rand($firstNames)];
-                $last = $lastNames[array_rand($lastNames)];
-                $upn = strtolower("{$first}.{$last}") . rand(1, 99) . '@' . $tenant->primary_domain;
+            $usedUpns = [];
+
+            $makeUpn = function () use ($firstNames, $lastNames, $tenant, &$usedUpns) {
+                do {
+                    $first = $firstNames[array_rand($firstNames)];
+                    $last = $lastNames[array_rand($lastNames)];
+                    $upn = strtolower("{$first}.{$last}") . rand(1, 99) . '@' . $tenant->primary_domain;
+                } while (in_array($upn, $usedUpns));
+                $usedUpns[] = $upn;
+                return ['first' => $first, 'last' => $last, 'upn' => $upn];
+            };
+
+            // Pattern 1: Licensed but NEVER used (all activity null)
+            for ($i = 0; $i < $neverUsedCount; $i++) {
+                $u = $makeUpn();
+                $rows[] = [
+                    'tenant_id' => $tenant->tenant_id,
+                    'user_principal_name' => $u['upn'],
+                    'display_name' => "{$u['first']} {$u['last']}",
+                    'last_activity_date' => null,
+                    'last_activity_teams' => null,
+                    'last_activity_word' => null,
+                    'last_activity_excel' => null,
+                    'last_activity_powerpoint' => null,
+                    'last_activity_outlook' => null,
+                    'last_activity_onenote' => null,
+                    'last_activity_copilot_chat' => null,
+                    'copilot_license_assigned' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            // Pattern 2: Licensed but inactive (last activity 45-90 days ago)
+            for ($i = 0; $i < $inactiveCount; $i++) {
+                $u = $makeUpn();
+                $staleDays = rand(45, 90);
+                $rows[] = [
+                    'tenant_id' => $tenant->tenant_id,
+                    'user_principal_name' => $u['upn'],
+                    'display_name' => "{$u['first']} {$u['last']}",
+                    'last_activity_date' => now()->subDays($staleDays)->toDateString(),
+                    'last_activity_teams' => rand(1, 100) <= 50 ? now()->subDays(rand($staleDays, $staleDays + 15))->toDateString() : null,
+                    'last_activity_word' => rand(1, 100) <= 30 ? now()->subDays(rand($staleDays, $staleDays + 20))->toDateString() : null,
+                    'last_activity_excel' => null,
+                    'last_activity_powerpoint' => null,
+                    'last_activity_outlook' => rand(1, 100) <= 40 ? now()->subDays(rand($staleDays, $staleDays + 10))->toDateString() : null,
+                    'last_activity_onenote' => null,
+                    'last_activity_copilot_chat' => null,
+                    'copilot_license_assigned' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            // Pattern 3: Power users (licensed, active across 5+ apps within last 30 days)
+            for ($i = 0; $i < $powerUserCount; $i++) {
+                $u = $makeUpn();
+                $rows[] = [
+                    'tenant_id' => $tenant->tenant_id,
+                    'user_principal_name' => $u['upn'],
+                    'display_name' => "{$u['first']} {$u['last']}",
+                    'last_activity_date' => now()->subDays(rand(0, 3))->toDateString(),
+                    'last_activity_teams' => now()->subDays(rand(0, 7))->toDateString(),
+                    'last_activity_word' => now()->subDays(rand(0, 10))->toDateString(),
+                    'last_activity_excel' => now()->subDays(rand(0, 14))->toDateString(),
+                    'last_activity_powerpoint' => now()->subDays(rand(0, 14))->toDateString(),
+                    'last_activity_outlook' => now()->subDays(rand(0, 5))->toDateString(),
+                    'last_activity_onenote' => now()->subDays(rand(0, 20))->toDateString(),
+                    'last_activity_copilot_chat' => now()->subDays(rand(0, 10))->toDateString(),
+                    'copilot_license_assigned' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            // Remaining users: regular randomized generation
+            $remainingCount = $userCount - $specialSlots;
+            for ($i = 0; $i < $remainingCount; $i++) {
+                $u = $makeUpn();
                 $licensed = (rand(1, 100) / 100) <= $licenseRate;
 
                 // Activity dates - only licensed users can have activity
@@ -828,8 +1115,8 @@ class DemoDataSeeder extends Seeder
 
                 $rows[] = [
                     'tenant_id' => $tenant->tenant_id,
-                    'user_principal_name' => $upn,
-                    'display_name' => "{$first} {$last}",
+                    'user_principal_name' => $u['upn'],
+                    'display_name' => "{$u['first']} {$u['last']}",
                     'last_activity_date' => $lastActivityDate,
                     'last_activity_teams' => $teamsDate,
                     'last_activity_word' => $wordDate,
@@ -1111,18 +1398,477 @@ class DemoDataSeeder extends Seeder
             ],
         ];
 
-        foreach ($profiles as $tenantId => $scores) {
-            DB::table('copilot_readiness')->insert(array_merge($scores, [
+        $dataPoints = 12;
+
+        foreach ($profiles as $tenantId => $current) {
+            // How much worse they were 90 days ago
+            $startDelta = rand(15, 25);
+
+            for ($i = 0; $i < $dataPoints; $i++) {
+                // Calculate date: spread evenly over 90 days
+                $daysAgo = (int) round(90 - ($i * (90 / ($dataPoints - 1))));
+                $progress = $i / ($dataPoints - 1); // 0.0 → 1.0
+
+                // Interpolate scores from start to current with noise
+                $scores = [];
+                foreach (['overall_score', 'data_exposure_score', 'access_governance_score', 'data_protection_score', 'ai_governance_score'] as $key) {
+                    $start = max(0, $current[$key] - $startDelta + rand(-3, 3));
+                    $value = $start + ($current[$key] - $start) * $progress + (rand(-20, 20) / 10);
+                    $scores[$key] = round(max(0, min(100, $value)), 2);
+                }
+
+                DB::table('copilot_readiness')->insert(array_merge($scores, [
+                    'tenant_id' => $tenantId,
+                    'copilot_licensed_users' => $current['copilot_licensed_users'],
+                    'copilot_active_users' => $current['copilot_active_users'],
+                    'sites_with_everyone_access' => $current['sites_with_everyone_access'],
+                    'sites_with_external_sharing' => $current['sites_with_external_sharing'],
+                    'sites_with_guest_access' => $current['sites_with_guest_access'],
+                    'public_sites_count' => $current['public_sites_count'],
+                    'sensitivity_labels_count' => $current['sensitivity_labels_count'],
+                    'sensitivity_labels_applied_pct' => $current['sensitivity_labels_applied_pct'],
+                    'm365_apps_on_current_channel_pct' => $current['m365_apps_on_current_channel_pct'],
+                    'calculated_at' => now()->subDays($daysAgo),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]));
+            }
+        }
+    }
+
+    // ─── Authentication Method Stats ─────────────────────────
+
+    private function seedAuthMethodStats(): void
+    {
+        $stats = [
+            'a1b2c3d4-1111-4000-8000-000000000001' => [ // Contoso - 85 users
+                'total_users' => 85,
+                'mfa_capable_users' => 72,
+                'authenticator_app_count' => 55,
+                'fido2_count' => 8,
+                'windows_hello_count' => 15,
+                'phone_sms_count' => 35,
+                'phone_call_count' => 12,
+                'email_otp_count' => 20,
+                'password_only_count' => 13,
+                'passwordless_count' => 23,
+                'sspr_capable_count' => 65,
+                'sspr_registered_count' => 58,
+            ],
+            'a1b2c3d4-2222-4000-8000-000000000002' => [ // Northwind - 42 users
+                'total_users' => 42,
+                'mfa_capable_users' => 30,
+                'authenticator_app_count' => 22,
+                'fido2_count' => 2,
+                'windows_hello_count' => 6,
+                'phone_sms_count' => 18,
+                'phone_call_count' => 5,
+                'email_otp_count' => 10,
+                'password_only_count' => 12,
+                'passwordless_count' => 8,
+                'sspr_capable_count' => 28,
+                'sspr_registered_count' => 22,
+            ],
+            'a1b2c3d4-3333-4000-8000-000000000003' => [ // Adventure Works - 120 users
+                'total_users' => 120,
+                'mfa_capable_users' => 102,
+                'authenticator_app_count' => 80,
+                'fido2_count' => 15,
+                'windows_hello_count' => 30,
+                'phone_sms_count' => 50,
+                'phone_call_count' => 18,
+                'email_otp_count' => 28,
+                'password_only_count' => 18,
+                'passwordless_count' => 45,
+                'sspr_capable_count' => 95,
+                'sspr_registered_count' => 88,
+            ],
+            'a1b2c3d4-4444-4000-8000-000000000004' => [ // Fabrikam - 55 users
+                'total_users' => 55,
+                'mfa_capable_users' => 35,
+                'authenticator_app_count' => 25,
+                'fido2_count' => 3,
+                'windows_hello_count' => 8,
+                'phone_sms_count' => 20,
+                'phone_call_count' => 7,
+                'email_otp_count' => 12,
+                'password_only_count' => 20,
+                'passwordless_count' => 11,
+                'sspr_capable_count' => 30,
+                'sspr_registered_count' => 24,
+            ],
+            'a1b2c3d4-5555-4000-8000-000000000005' => [ // Woodgrove Bank - 200 users
+                'total_users' => 200,
+                'mfa_capable_users' => 196,
+                'authenticator_app_count' => 170,
+                'fido2_count' => 45,
+                'windows_hello_count' => 80,
+                'phone_sms_count' => 60,
+                'phone_call_count' => 25,
+                'email_otp_count' => 40,
+                'password_only_count' => 4,
+                'passwordless_count' => 125,
+                'sspr_capable_count' => 195,
+                'sspr_registered_count' => 192,
+            ],
+            'a1b2c3d4-6666-4000-8000-000000000006' => [ // Litware - 28 users
+                'total_users' => 28,
+                'mfa_capable_users' => 14,
+                'authenticator_app_count' => 10,
+                'fido2_count' => 0,
+                'windows_hello_count' => 2,
+                'phone_sms_count' => 8,
+                'phone_call_count' => 3,
+                'email_otp_count' => 5,
+                'password_only_count' => 14,
+                'passwordless_count' => 2,
+                'sspr_capable_count' => 12,
+                'sspr_registered_count' => 8,
+            ],
+            'a1b2c3d4-7777-4000-8000-000000000007' => [ // Tailspin Toys - 65 users (pending tenant)
+                'total_users' => 65,
+                'mfa_capable_users' => 48,
+                'authenticator_app_count' => 35,
+                'fido2_count' => 5,
+                'windows_hello_count' => 12,
+                'phone_sms_count' => 28,
+                'phone_call_count' => 9,
+                'email_otp_count' => 15,
+                'password_only_count' => 17,
+                'passwordless_count' => 17,
+                'sspr_capable_count' => 40,
+                'sspr_registered_count' => 34,
+            ],
+            'a1b2c3d4-8888-4000-8000-000000000008' => [ // Proseware - 150 users
+                'total_users' => 150,
+                'mfa_capable_users' => 140,
+                'authenticator_app_count' => 115,
+                'fido2_count' => 25,
+                'windows_hello_count' => 45,
+                'phone_sms_count' => 55,
+                'phone_call_count' => 20,
+                'email_otp_count' => 32,
+                'password_only_count' => 10,
+                'passwordless_count' => 70,
+                'sspr_capable_count' => 130,
+                'sspr_registered_count' => 122,
+            ],
+        ];
+
+        foreach ($stats as $tenantId => $data) {
+            DB::table('authentication_method_stats')->insert(array_merge($data, [
                 'tenant_id' => $tenantId,
-                'details' => json_encode([
-                    'assessment_version' => '1.0',
-                    'data_sources_evaluated' => ['SharePoint', 'OneDrive', 'Exchange', 'Teams'],
-                    'recommendations_count' => max(0, (int) round((100 - $scores['overall_score']) / 5)),
-                ]),
-                'calculated_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]));
+        }
+    }
+
+    // ─── Directory Role Assignments ──────────────────────────
+
+    private function seedDirectoryRoleAssignments(): void
+    {
+        $roles = [
+            ['id' => '62e90394-69f5-4237-9190-012177145e10', 'name' => 'Global Administrator', 'max' => 3],
+            ['id' => 'fe930be7-5e62-47db-91af-98c3a49a38b1', 'name' => 'User Administrator', 'max' => 1],
+            ['id' => '29232cdf-9323-42fd-ade2-1d097af3e4de', 'name' => 'Exchange Administrator', 'max' => 1],
+            ['id' => 'f28a1f50-f6e7-4571-818b-6a12f2af6b6c', 'name' => 'SharePoint Administrator', 'max' => 1],
+            ['id' => '194ae4cb-b126-40b2-bd5b-6091b380977d', 'name' => 'Security Administrator', 'max' => 1],
+            ['id' => '17315797-102d-40b4-93e0-432062caca18', 'name' => 'Compliance Administrator', 'max' => 1],
+            ['id' => '69091246-20e8-4a56-aa4d-066075b2a7a8', 'name' => 'Teams Administrator', 'max' => 1],
+            ['id' => '729827e3-9c14-49f7-bb1b-9608f156bbb8', 'name' => 'Helpdesk Administrator', 'max' => 1],
+        ];
+
+        $tenants = [
+            ['id' => 'a1b2c3d4-1111-4000-8000-000000000001', 'domain' => 'contoso.com', 'count' => 6],
+            ['id' => 'a1b2c3d4-2222-4000-8000-000000000002', 'domain' => 'northwindtraders.com', 'count' => 4],
+            ['id' => 'a1b2c3d4-3333-4000-8000-000000000003', 'domain' => 'adventureworks.co.nz', 'count' => 7],
+            ['id' => 'a1b2c3d4-4444-4000-8000-000000000004', 'domain' => 'fabrikam.com', 'count' => 5],
+            ['id' => 'a1b2c3d4-5555-4000-8000-000000000005', 'domain' => 'woodgrovebank.com', 'count' => 8],
+            ['id' => 'a1b2c3d4-6666-4000-8000-000000000006', 'domain' => 'litware.io', 'count' => 3],
+            ['id' => 'a1b2c3d4-7777-4000-8000-000000000007', 'domain' => 'tailspintoys.com', 'count' => 4],
+            ['id' => 'a1b2c3d4-8888-4000-8000-000000000008', 'domain' => 'proseware.com', 'count' => 7],
+        ];
+
+        $firstNames = ['Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Ethan', 'Sophia', 'Mason', 'Isabella', 'Logan'];
+        $lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
+
+        foreach ($tenants as $tenant) {
+            $selectedRoles = array_slice($roles, 0, $tenant['count']);
+
+            foreach ($selectedRoles as $roleIdx => $role) {
+                // Global Administrator gets 1-3 assignments; others get 1
+                $assignmentCount = $role['name'] === 'Global Administrator' ? rand(1, 3) : 1;
+
+                for ($a = 0; $a < $assignmentCount; $a++) {
+                    $first = $firstNames[array_rand($firstNames)];
+                    $last = $lastNames[array_rand($lastNames)];
+                    $upn = strtolower("{$first}.{$last}") . rand(1, 99) . '@' . $tenant['domain'];
+
+                    // Assignment type: direct (70%), group (20%), pim (10%)
+                    $typeRoll = rand(1, 100);
+                    $assignmentType = $typeRoll <= 70 ? 'direct' : ($typeRoll <= 90 ? 'group' : 'pim');
+
+                    // Status: active (80%), eligible (20%)
+                    $status = rand(1, 100) <= 80 ? 'active' : 'eligible';
+
+                    $startDate = now()->subDays(rand(30, 365));
+
+                    DB::table('directory_role_assignments')->insert([
+                        'tenant_id' => $tenant['id'],
+                        'user_id' => Str::uuid()->toString(),
+                        'user_principal_name' => $upn,
+                        'display_name' => "{$first} {$last}",
+                        'role_id' => $role['id'],
+                        'role_display_name' => $role['name'],
+                        'assignment_type' => $assignmentType,
+                        'status' => $status,
+                        'start_date' => $startDate,
+                        'end_date' => $status === 'eligible' ? $startDate->copy()->addDays(rand(90, 365)) : null,
+                        'is_built_in_role' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+        }
+    }
+
+    // ─── Guest Users ─────────────────────────────────────────
+
+    private function seedGuestUsers(): void
+    {
+        $externalDomains = [
+            ['domain' => 'partner.com', 'company' => 'Partner Solutions Ltd'],
+            ['domain' => 'consultant.co.nz', 'company' => 'Consultant Group NZ'],
+            ['domain' => 'vendor.org', 'company' => 'Vendor Services Inc'],
+            ['domain' => 'supplier.net', 'company' => 'Supplier Network Corp'],
+            ['domain' => 'agency.io', 'company' => 'Digital Agency Co'],
+            ['domain' => 'contractor.com', 'company' => 'Contractor Professionals'],
+            ['domain' => 'legal-firm.com', 'company' => 'Legal & Associates LLP'],
+            ['domain' => 'accounting-co.nz', 'company' => 'Accounting Co NZ'],
+        ];
+
+        $firstNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery', 'Cameron', 'Dakota', 'Jamie', 'Reese', 'Skyler', 'Finley', 'Rowan', 'Blake', 'Hayden', 'Emerson', 'Phoenix', 'Sage'];
+        $lastNames = ['Parker', 'Cooper', 'Reed', 'Brooks', 'Hayes', 'Griffin', 'Ward', 'Foster', 'Russell', 'Grant', 'Porter', 'Webb', 'Sullivan', 'Murphy', 'Bennett', 'Coleman', 'Perry', 'Stone', 'Murray', 'Walsh'];
+
+        $tenants = [
+            ['id' => 'a1b2c3d4-1111-4000-8000-000000000001', 'domain' => 'contoso.com', 'guest_count' => 15],
+            ['id' => 'a1b2c3d4-2222-4000-8000-000000000002', 'domain' => 'northwindtraders.com', 'guest_count' => 10],
+            ['id' => 'a1b2c3d4-3333-4000-8000-000000000003', 'domain' => 'adventureworks.co.nz', 'guest_count' => 22],
+            ['id' => 'a1b2c3d4-4444-4000-8000-000000000004', 'domain' => 'fabrikam.com', 'guest_count' => 12],
+            ['id' => 'a1b2c3d4-5555-4000-8000-000000000005', 'domain' => 'woodgrovebank.com', 'guest_count' => 25],
+            ['id' => 'a1b2c3d4-6666-4000-8000-000000000006', 'domain' => 'litware.io', 'guest_count' => 8],
+            ['id' => 'a1b2c3d4-7777-4000-8000-000000000007', 'domain' => 'tailspintoys.com', 'guest_count' => 11],
+            ['id' => 'a1b2c3d4-8888-4000-8000-000000000008', 'domain' => 'proseware.com', 'guest_count' => 20],
+        ];
+
+        foreach ($tenants as $tenant) {
+            $rows = [];
+
+            for ($i = 0; $i < $tenant['guest_count']; $i++) {
+                $first = $firstNames[array_rand($firstNames)];
+                $last = $lastNames[array_rand($lastNames)];
+                $ext = $externalDomains[array_rand($externalDomains)];
+                $email = strtolower("{$first}.{$last}") . rand(1, 99) . '@' . $ext['domain'];
+                $guestUpn = str_replace('@', '_', $email) . '#EXT#@' . $tenant['domain'];
+
+                // external_user_state: Accepted (70%), PendingAcceptance (20%), null (10%)
+                $stateRoll = rand(1, 100);
+                $externalState = $stateRoll <= 70 ? 'Accepted' : ($stateRoll <= 90 ? 'PendingAcceptance' : null);
+
+                // creation_type: Invitation (80%), DirectConnect (15%), SelfService (5%)
+                $creationRoll = rand(1, 100);
+                $creationType = $creationRoll <= 80 ? 'Invitation' : ($creationRoll <= 95 ? 'DirectConnect' : 'SelfService');
+
+                // account_enabled: true (85%), false (15%)
+                $enabled = rand(1, 100) <= 85;
+
+                // last_sign_in_at: varied — some null, some recent, some stale (90+ days)
+                $signInRoll = rand(1, 100);
+                if ($signInRoll <= 15) {
+                    $lastSignIn = null; // never signed in
+                } elseif ($signInRoll <= 40) {
+                    $lastSignIn = now()->subDays(rand(91, 300)); // stale
+                } elseif ($signInRoll <= 70) {
+                    $lastSignIn = now()->subDays(rand(1, 30)); // recent
+                } else {
+                    $lastSignIn = now()->subDays(rand(31, 90)); // moderate
+                }
+
+                $createdDate = now()->subDays(rand(30, 500));
+
+                $rows[] = [
+                    'tenant_id' => $tenant['id'],
+                    'user_id' => Str::uuid()->toString(),
+                    'display_name' => "{$first} {$last}",
+                    'user_principal_name' => $guestUpn,
+                    'mail' => $email,
+                    'user_type' => 'Guest',
+                    'external_user_state' => $externalState,
+                    'creation_type' => $creationType,
+                    'company_name' => $ext['company'],
+                    'domain' => $ext['domain'],
+                    'created_datetime' => $createdDate,
+                    'last_sign_in_at' => $lastSignIn,
+                    'account_enabled' => $enabled,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            foreach (array_chunk($rows, 50) as $chunk) {
+                DB::table('guest_users')->insert($chunk);
+            }
+        }
+    }
+
+    // ─── Sign-In Summaries ───────────────────────────────────
+
+    private function seedSignInSummaries(): void
+    {
+        $tenants = [
+            ['id' => 'a1b2c3d4-1111-4000-8000-000000000001', 'users' => 85],
+            ['id' => 'a1b2c3d4-2222-4000-8000-000000000002', 'users' => 42],
+            ['id' => 'a1b2c3d4-3333-4000-8000-000000000003', 'users' => 120],
+            ['id' => 'a1b2c3d4-4444-4000-8000-000000000004', 'users' => 55],
+            ['id' => 'a1b2c3d4-5555-4000-8000-000000000005', 'users' => 200],
+            ['id' => 'a1b2c3d4-6666-4000-8000-000000000006', 'users' => 28],
+            ['id' => 'a1b2c3d4-7777-4000-8000-000000000007', 'users' => 65],
+            ['id' => 'a1b2c3d4-8888-4000-8000-000000000008', 'users' => 150],
+        ];
+
+        $failureReasons = [
+            'Invalid password',
+            'MFA denied',
+            'Account locked',
+            'Expired token',
+            'Conditional Access block',
+            'IP blocked',
+        ];
+
+        $locations = [
+            ['country' => 'New Zealand', 'city' => 'Auckland'],
+            ['country' => 'New Zealand', 'city' => 'Wellington'],
+            ['country' => 'New Zealand', 'city' => 'Christchurch'],
+            ['country' => 'Australia', 'city' => 'Sydney'],
+            ['country' => 'Australia', 'city' => 'Melbourne'],
+            ['country' => 'United States', 'city' => 'New York'],
+            ['country' => 'United Kingdom', 'city' => 'London'],
+            ['country' => 'Singapore', 'city' => 'Singapore'],
+        ];
+
+        $apps = [
+            'Microsoft Teams',
+            'Microsoft Outlook',
+            'SharePoint Online',
+            'Microsoft 365 Portal',
+            'Azure Portal',
+            'Microsoft OneDrive',
+            'Microsoft Word',
+            'Microsoft Excel',
+            'Microsoft PowerPoint',
+            'Power BI',
+        ];
+
+        foreach ($tenants as $tenant) {
+            $rows = [];
+
+            for ($day = 0; $day < 30; $day++) {
+                $date = Carbon::today()->subDays($day);
+
+                // Total sign-ins proportional to user count (roughly 1-1.5x users per day)
+                $baseSignIns = (int) round($tenant['users'] * (rand(90, 140) / 100));
+                // Weekends have fewer sign-ins
+                if ($date->isWeekend()) {
+                    $baseSignIns = (int) round($baseSignIns * 0.3);
+                }
+                $total = max(1, $baseSignIns);
+
+                // Success rate: 95-99%
+                $successRate = rand(95, 99) / 100;
+                $successful = (int) round($total * $successRate);
+                $failed = $total - $successful;
+
+                // Interactive vs non-interactive
+                $interactivePct = rand(60, 70) / 100;
+                $interactive = (int) round($total * $interactivePct);
+                $nonInteractive = $total - $interactive;
+
+                // MFA stats based on interactive sign-ins
+                $mfaPromptedPct = rand(40, 60) / 100;
+                $mfaPrompted = (int) round($interactive * $mfaPromptedPct);
+                $mfaSucceeded = (int) round($mfaPrompted * 0.95);
+                $mfaFailed = $mfaPrompted - $mfaSucceeded;
+
+                // Top failure reason
+                $topReason = $failureReasons[array_rand($failureReasons)];
+                $topFailureCount = $failed > 0 ? (int) round($failed * (rand(30, 60) / 100)) : 0;
+
+                // Unique users: 60-80% of total users
+                $uniqueUsers = (int) round($tenant['users'] * (rand(60, 80) / 100));
+                if ($date->isWeekend()) {
+                    $uniqueUsers = (int) round($uniqueUsers * 0.35);
+                }
+
+                // by_location: 2-4 random locations
+                $locCount = rand(2, 4);
+                $selectedLocs = array_rand($locations, $locCount);
+                if (!is_array($selectedLocs)) $selectedLocs = [$selectedLocs];
+                $remainingForLoc = $total;
+                $byLocation = [];
+                foreach ($selectedLocs as $li => $locIdx) {
+                    $isLast = ($li === count($selectedLocs) - 1);
+                    $locCount = $isLast ? $remainingForLoc : (int) round($remainingForLoc * (rand(25, 50) / 100));
+                    $locCount = max(1, $locCount);
+                    $remainingForLoc -= $locCount;
+                    $byLocation[] = [
+                        'country' => $locations[$locIdx]['country'],
+                        'city' => $locations[$locIdx]['city'],
+                        'count' => $locCount,
+                    ];
+                }
+
+                // by_app: 3-5 random apps
+                $appCount = rand(3, 5);
+                $selectedApps = array_rand(array_flip($apps), $appCount);
+                $remainingForApp = $total;
+                $byApp = [];
+                foreach ($selectedApps as $ai => $appName) {
+                    $isLast = ($ai === count($selectedApps) - 1);
+                    $appCountVal = $isLast ? $remainingForApp : (int) round($remainingForApp * (rand(20, 40) / 100));
+                    $appCountVal = max(1, $appCountVal);
+                    $remainingForApp -= $appCountVal;
+                    $byApp[] = [
+                        'app_name' => $appName,
+                        'count' => $appCountVal,
+                    ];
+                }
+
+                $rows[] = [
+                    'tenant_id' => $tenant['id'],
+                    'date' => $date->toDateString(),
+                    'total_sign_ins' => $total,
+                    'successful_sign_ins' => $successful,
+                    'failed_sign_ins' => $failed,
+                    'interactive_sign_ins' => $interactive,
+                    'non_interactive_sign_ins' => $nonInteractive,
+                    'mfa_prompted' => $mfaPrompted,
+                    'mfa_succeeded' => $mfaSucceeded,
+                    'mfa_failed' => $mfaFailed,
+                    'top_failure_reason' => $failed > 0 ? $topReason : null,
+                    'top_failure_count' => $topFailureCount,
+                    'unique_users' => $uniqueUsers,
+                    'by_location' => json_encode($byLocation),
+                    'by_app' => json_encode($byApp),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            foreach (array_chunk($rows, 50) as $chunk) {
+                DB::table('sign_in_summaries')->insert($chunk);
+            }
         }
     }
 }

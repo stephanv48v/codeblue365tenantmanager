@@ -1,14 +1,24 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
+import ChartCard from '../../Components/ChartCard';
 import StatusBadge from '../../Components/StatusBadge';
 import SkeletonLoader from '../../Components/SkeletonLoader';
 import FilterBar from '../../Components/FilterBar';
 import PaginationControls from '../../Components/PaginationControls';
 import BulkActionBar from '../../Components/BulkActionBar';
 import { useTenantScope } from '../../hooks/useTenantScope';
+import ExportButton from '../../Components/ExportButton';
 import { BellAlertIcon, CheckCircleIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+const SEVERITY_COLORS: Record<string, string> = {
+    critical: '#ef4444',
+    high: '#f97316',
+    medium: '#f59e0b',
+    low: '#3b82f6',
+};
 
 type Alert = {
     id: number;
@@ -86,18 +96,27 @@ export default function AlertsIndex() {
     }, [selectedTenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleBulkAction = async (action: 'dismiss' | 'acknowledge') => {
-        await fetch('/api/v1/alerts/bulk-update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: Array.from(selectedIds), action }),
-        });
-        setSelectedIds(new Set());
-        fetchAlerts(pagination.current_page, pagination.per_page);
+        try {
+            await fetch('/api/v1/alerts/bulk-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: Array.from(selectedIds), action }),
+            });
+            setSelectedIds(new Set());
+            fetchAlerts(pagination.current_page, pagination.per_page);
+        } catch {
+            // Network error — silently refresh to show current state
+            fetchAlerts(pagination.current_page, pagination.per_page);
+        }
     };
 
     const handleSingleAction = async (id: number, action: 'acknowledge' | 'dismiss') => {
-        await fetch(`/api/v1/alerts/${id}/${action}`, { method: 'PUT' });
-        fetchAlerts(pagination.current_page, pagination.per_page);
+        try {
+            await fetch(`/api/v1/alerts/${id}/${action}`, { method: 'PUT' });
+            fetchAlerts(pagination.current_page, pagination.per_page);
+        } catch {
+            fetchAlerts(pagination.current_page, pagination.per_page);
+        }
     };
 
     const handleFilterChange = (key: string, value: string) => {
@@ -141,6 +160,7 @@ export default function AlertsIndex() {
                 title="Alerts"
                 subtitle="System alerts and notifications"
                 breadcrumbs={[{ label: 'Security & Compliance' }, { label: 'Alerts' }]}
+                actions={<ExportButton csvEndpoint="/api/v1/reports/alerts" />}
             />
 
             {/* Stat Cards */}
@@ -150,6 +170,48 @@ export default function AlertsIndex() {
                 <StatCard label="Acknowledged" value={summary.acknowledged} icon={EyeIcon} accentColor="amber" />
                 <StatCard label="Dismissed" value={summary.dismissed} icon={CheckCircleIcon} accentColor="slate" />
             </div>
+
+            {/* Severity Distribution */}
+            {summary.total > 0 && (() => {
+                const severityCounts: Record<string, number> = {};
+                alerts.forEach((a) => {
+                    severityCounts[a.severity] = (severityCounts[a.severity] ?? 0) + 1;
+                });
+                const severityData = ['critical', 'high', 'medium', 'low']
+                    .filter((s) => (severityCounts[s] ?? 0) > 0)
+                    .map((s) => ({
+                        name: s.charAt(0).toUpperCase() + s.slice(1),
+                        value: severityCounts[s] ?? 0,
+                        fill: SEVERITY_COLORS[s],
+                    }));
+
+                return severityData.length > 0 ? (
+                    <div className="mb-6">
+                        <ChartCard title="Severity Distribution" subtitle="Breakdown by alert severity">
+                            <ResponsiveContainer width="100%" height={240}>
+                                <PieChart>
+                                    <Pie
+                                        data={severityData}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={50}
+                                        outerRadius={85}
+                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                    >
+                                        {severityData.map((entry, i) => (
+                                            <Cell key={i} fill={entry.fill} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </ChartCard>
+                    </div>
+                ) : null;
+            })()}
 
             {/* Filter Bar */}
             <div className="mb-4">
